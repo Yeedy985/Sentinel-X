@@ -1,0 +1,1151 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Search, ChevronDown, XCircle, Wand2, Eraser, HelpCircle, Loader2, CheckCircle, AlertCircle, Wallet } from 'lucide-react';
+import { useStore } from '../store/useStore';
+import { getPrice, getKlines, getExchangeInfo, getAccountInfo, setCurrentExchange } from '../services/binance';
+import { getExchangeConfig } from '../services/exchangeConfig';
+import { calculateATR, calculateAdaptiveRange, getVolatilityLevel } from '../services/gridEngine';
+import { db } from '../db';
+import { useLiveQuery } from 'dexie-react-hooks';
+import type { Strategy, GridLayerConfig, RiskConfig, RangeMode, ProfitAllocation, EndMode, ApiConfig, AssetBalance } from '../types';
+import { useIsMobile } from '../hooks/useIsMobile';
+
+interface Props {
+  onCreated: (strategy: Strategy) => void;
+  onCancel: () => void;
+}
+
+const defaultRisk: RiskConfig = {
+  circuitBreakEnabled: true,
+  circuitBreakDropPercent: 5,
+  circuitBreakVolumeMultiple: 5,
+  dailyDrawdownEnabled: true,
+  dailyDrawdownPercent: 5,
+  maxPositionEnabled: true,
+  maxPositionPercent: 80,
+  trendDefenseEnabled: true,
+  trendDefenseEmaFast: 12,
+  trendDefenseEmaSlow: 26,
+};
+
+const defaultLayers: GridLayerConfig[] = [
+  { layer: 'trend', enabled: true, gridCount: 10, upperPrice: 0, lowerPrice: 0, rangeRatio: 1.0, fundRatio: 0.3, profitRate: 3, profitMode: 'distance_increase',
+    fixedProfitRate: 3, perGridMinRate: 2, perGridMaxRate: 5, distBaseRate: 1.5, distIncreaseStep: 0.3, distMaxRate: 8, trendBaseRate: 3, trendBullMultiplier: 0.8, trendBearMultiplier: 1.5 },
+  { layer: 'swing', enabled: true, gridCount: 30, upperPrice: 0, lowerPrice: 0, rangeRatio: 0.6, fundRatio: 0.5, profitRate: 1.5, profitMode: 'fixed_rate',
+    fixedProfitRate: 1.5, perGridMinRate: 0.8, perGridMaxRate: 3, distBaseRate: 1, distIncreaseStep: 0.2, distMaxRate: 4, trendBaseRate: 1.5, trendBullMultiplier: 0.8, trendBearMultiplier: 1.3 },
+  { layer: 'spike', enabled: true, gridCount: 4, upperPrice: 0, lowerPrice: 0, rangeRatio: 1.5, fundRatio: 0.2, profitRate: 10, profitMode: 'fixed_rate',
+    fixedProfitRate: 10, perGridMinRate: 10, perGridMaxRate: 30, distBaseRate: 5, distIncreaseStep: 2, distMaxRate: 30, trendBaseRate: 10, trendBullMultiplier: 0.7, trendBearMultiplier: 2 },
+];
+
+export default function StrategyCreator({ onCreated, onCancel }: Props) {
+  const { symbols, setSymbols, apiConfig } = useStore();
+  const isMobile = useIsMobile();
+  const savedConfigs = useLiveQuery(() => db.apiConfigs.toArray(), []);
+  const [selectedAccount, setSelectedAccount] = useState<ApiConfig | null>(null);
+
+  // 连接检测状态
+  const [checking, setChecking] = useState(false);
+  const [connectionOk, setConnectionOk] = useState(false);
+  const [connectionError, setConnectionError] = useState('');
+  const [localBalances, setLocalBalances] = useState<AssetBalance[]>([]);
+  const [localTotalUsdt, setLocalTotalUsdt] = useState(0);
+
+  // 选择账户后自动检测连接
+  const handleCheckConnection = useCallback(async (account: ApiConfig) => {
+    setChecking(true);
+    setConnectionOk(false);
+    setConnectionError('');
+    setLocalBalances([]);
+    setLocalTotalUsdt(0);
+    try {
+      setCurrentExchange(account.exchange || 'binance');
+      const data = await getAccountInfo(account.apiKey, account.apiSecret);
+      const cfg = getExchangeConfig(account.exchange || 'binance');
+      let total = 0;
+      for (const balance of data.balances) {
+        if (cfg.quoteAssets.includes(balance.asset)) {
+          balance.usdtValue = parseFloat(balance.free) + parseFloat(balance.locked);
+        } else {
+          try {
+            const price = await getPrice(`${balance.asset}USDT`);
+            balance.usdtValue = (parseFloat(balance.free) + parseFloat(balance.locked)) * price;
+          } catch {
+            balance.usdtValue = 0;
+          }
+        }
+        total += balance.usdtValue;
+      }
+      setLocalBalances(data.balances.sort((a, b) => b.usdtValue - a.usdtValue));
+      setLocalTotalUsdt(total);
+      setConnectionOk(true);
+    } catch (err: any) {
+      setConnectionError(err.message || '连接失败');
+    }
+    setChecking(false);
+  }, []);
+
+  // 自动选择当前活跃账户并检测连接
+  useEffect(() => {
+    if (!selectedAccount && apiConfig) {
+      setSelectedAccount(apiConfig);
+      handleCheckConnection(apiConfig);
+    }
+  }, [apiConfig, selectedAccount, handleCheckConnection]);
+
+  const handleSelectAccount = (config: ApiConfig) => {
+    setSelectedAccount(config);
+    setCurrentExchange(config.exchange || 'binance');
+    setConnectionOk(false);
+    setConnectionError('');
+    handleCheckConnection(config);
+  };
+  const [step, setStep] = useState(1);
+  const [symbolSearch, setSymbolSearch] = useState('');
+  const [symbol, setSymbol] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [name, setName] = useState('');
+  const [totalFund, setTotalFund] = useState(1000);
+  const [entryPrice, setEntryPrice] = useState(0);
+  const [rangeMode, setRangeMode] = useState<RangeMode>('fixed');
+  const [upperPrice, setUpperPrice] = useState(0);
+  const [lowerPrice, setLowerPrice] = useState(0);
+  const [atrPeriod] = useState(14);
+  const [atrMultiplier] = useState(2);
+  const [layers, setLayers] = useState<GridLayerConfig[]>(defaultLayers);
+  const [profitAllocation, setProfitAllocation] = useState<ProfitAllocation>('ratio');
+  const [profitRatio, setProfitRatio] = useState(50);
+  const [reinvestMode, setReinvestMode] = useState<'per_grid' | 'whole_strategy'>('per_grid');
+  const [thresholdHoldCoinPrice, setThresholdHoldCoinPrice] = useState(0);
+  const [thresholdHoldUsdtPrice, setThresholdHoldUsdtPrice] = useState(0);
+  const [endMode, setEndMode] = useState<EndMode>('keep_position');
+  const [autoRebalance, setAutoRebalance] = useState(true);
+  const [currentPrice, setCurrentPrice] = useState(0);
+  const [volatility, setVolatility] = useState({ level: '', percent: 0 });
+  const [, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (symbols.length === 0) {
+      getExchangeInfo().then(setSymbols);
+    }
+  }, [symbols, setSymbols]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const popularBases = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'DOGE', 'ADA', 'AVAX', 'DOT', 'MATIC', 'LINK', 'UNI'];
+  const filteredSymbols = symbols.filter((s) => {
+    if (!symbolSearch.trim()) {
+      return popularBases.includes(s.baseAsset);
+    }
+    const q = symbolSearch.toUpperCase();
+    return s.symbol.includes(q) || s.baseAsset.includes(q);
+  }).slice(0, 30);
+
+  const handleClearSymbol = () => {
+    setSymbol('');
+    setSymbolSearch('');
+    setCurrentPrice(0);
+    setVolatility({ level: '', percent: 0 });
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const selectSymbol = async (sym: string) => {
+    setSymbol(sym);
+    setSymbolSearch(sym.replace('USDT', ''));
+    setLoading(true);
+    try {
+      const [price, klines] = await Promise.all([
+        getPrice(sym),
+        getKlines(sym, '1h', 100),
+      ]);
+      setCurrentPrice(price);
+      setEntryPrice(price);
+      const atr = calculateATR(klines, atrPeriod);
+      const vol = getVolatilityLevel(atr, price);
+      setVolatility(vol);
+
+      if (rangeMode === 'volatility') {
+        const range = calculateAdaptiveRange(price, atr, atrMultiplier);
+        setUpperPrice(parseFloat(range.upper.toFixed(2)));
+        setLowerPrice(parseFloat(range.lower.toFixed(2)));
+        updateLayerPrices(range.lower, range.upper);
+      }
+      if (!name) setName(`${sym.replace('USDT', '')} 网格策略`);
+    } catch (err) {
+      console.error(err);
+    }
+    setLoading(false);
+  };
+
+  const updateLayerPrices = (lower: number, upper: number) => {
+    const halfRange = (upper - lower) / 2;
+    const center = entryPrice > 0 ? entryPrice : (upper + lower) / 2;
+    setLayers((prev) => prev.map((l) => {
+      const h = halfRange * l.rangeRatio;
+      return { ...l, upperPrice: +(center + h).toFixed(2), lowerPrice: +(center - h).toFixed(2) };
+    }));
+  };
+
+  const updateLayer = (index: number, updates: Partial<GridLayerConfig>) => {
+    setLayers((prev) => {
+      const next = prev.map((l, i) => i === index ? { ...l, ...updates } : l);
+      // Auto-balance fundRatio to always sum to 100%
+      if ('fundRatio' in updates) {
+        const changedVal = updates.fundRatio!;
+        const enabledOthers = next.filter((l, i) => i !== index && l.enabled);
+        const remaining = 1 - changedVal;
+        if (enabledOthers.length > 0) {
+          const othersSum = enabledOthers.reduce((s, l) => s + l.fundRatio, 0);
+          return next.map((l, i) => {
+            if (i === index) return l;
+            if (!l.enabled) return l;
+            const share = othersSum > 0 ? l.fundRatio / othersSum : 1 / enabledOthers.length;
+            return { ...l, fundRatio: Math.max(0, +(remaining * share).toFixed(4)) };
+          });
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleCreate = () => {
+    const baseAsset = symbol.replace('USDT', '');
+    const strategy: Strategy = {
+      name,
+      symbol,
+      baseAsset,
+      quoteAsset: 'USDT',
+      status: 'idle',
+      totalFund,
+      usedFund: 0,
+      rangeMode,
+      upperPrice,
+      lowerPrice,
+      centerPrice: currentPrice,
+      atrPeriod,
+      atrMultiplier,
+      layers,
+      profitAllocation,
+      profitRatio,
+      profitThreshold: 10,
+      trendSellAbovePercent: 10,
+      trendBuyBelowPercent: 10,
+      risk: defaultRisk,
+      autoRebalance,
+      rebalanceStepPercent: 5,
+      endMode,
+      totalProfit: 0,
+      todayProfit: 0,
+      totalTrades: 0,
+      winTrades: 0,
+      maxDrawdown: 0,
+      createdAt: Date.now(),
+    };
+    onCreated(strategy);
+  };
+
+  const layerNames: Record<string, string> = { trend: '趋势核心层', swing: '震荡波动层', spike: '插针收割层' };
+  const layerColors: Record<string, string> = { trend: 'border-blue-500', swing: 'border-emerald-500', spike: 'border-orange-500' };
+  const layerDescriptions: Record<string, string> = {
+    trend: '趋势核心层：使用较少的网格数和较大的利润率，捕捉大趋势中的波动。适合币价在明确趋势中运行的场景，网格间距大，单笔利润高，交易频率低。',
+    swing: '震荡波动层：使用较多的网格数和适中的利润率，捕捉日常震荡中的频繁波动。是主要的利润来源，网格间距适中，交易频率高，资金利用率最佳。',
+    spike: '插针收割层：利用极端价格波动（插针）进行低买高卖。网格区间最宽，利润率最高，触发频率低但单笔收益极高，专门收割市场恐慌和贪婪时刻。',
+  };
+  const [expandedLayerInfo, setExpandedLayerInfo] = useState<string | null>(null);
+
+  return (
+    <div className={`fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 ${isMobile ? 'p-0' : 'p-4'}`}>
+      <div className={`w-full ${isMobile ? 'h-full rounded-none' : 'max-w-3xl max-h-[90vh] rounded-2xl'} overflow-y-auto`} style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.97) 0%, rgba(10,15,30,0.95) 100%)', border: isMobile ? 'none' : '1px solid rgba(51,65,85,0.4)', boxShadow: isMobile ? 'none' : '0 24px 80px -12px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03) inset' }}>
+        {/* Header */}
+        <div className={`flex items-center justify-between ${isMobile ? 'px-4 py-3' : 'p-6'} sticky top-0 z-10`} style={{ borderBottom: '1px solid rgba(51,65,85,0.3)', background: 'linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(10,15,30,0.96) 100%)', backdropFilter: 'blur(12px)' }}>
+          <div>
+            <h2 className={`${isMobile ? 'text-base' : 'text-xl'} font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent`}>新建策略</h2>
+            <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mt-0.5 font-medium`}>步骤 {step} / 5</p>
+          </div>
+          <button onClick={onCancel} className="p-2 rounded-xl text-slate-500 hover:text-slate-300 hover:bg-white/[0.04] transition-all">
+            <X className={isMobile ? 'w-4 h-4' : 'w-5 h-5'} />
+          </button>
+        </div>
+
+        {/* Account Assets - 步骤2及以后始终显示 */}
+        {step >= 2 && connectionOk && localBalances.length > 0 && (
+          <div className={`${isMobile ? 'px-3 pt-3' : 'px-6 pt-4'}`}>
+            <div className={`rounded-xl ${isMobile ? 'p-3' : 'p-4'}`} style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.06) 0%, rgba(15,23,42,0.4) 100%)', border: '1px solid rgba(59,130,246,0.12)' }}>
+              <div className={`flex items-center justify-between ${isMobile ? 'mb-2' : 'mb-3'}`}>
+                <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-400 flex items-center gap-1.5`}>
+                  <Wallet className={isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
+                  {selectedAccount && getExchangeConfig(selectedAccount.exchange || 'binance').logo} {isMobile ? '' : selectedAccount?.label} 资产
+                </span>
+                <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-bold text-blue-400`}>
+                  ${localTotalUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {localBalances.slice(0, isMobile ? 6 : 12).map((b) => (
+                  <div
+                    key={b.asset}
+                    className={`flex items-center gap-1.5 ${isMobile ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} rounded-lg bg-slate-900/60`}
+                  >
+                    <span className="font-medium text-slate-200">{b.asset}</span>
+                    <span className="text-slate-500">{parseFloat(b.free).toFixed(b.asset === 'USDT' || b.asset === 'USDC' ? 2 : isMobile ? 4 : 6)}</span>
+                    {b.usdtValue > 0.01 && !isMobile && (
+                      <span className="text-slate-600">≈${b.usdtValue.toFixed(2)}</span>
+                    )}
+                  </div>
+                ))}
+                {localBalances.length > (isMobile ? 6 : 12) && (
+                  <div className={`flex items-center ${isMobile ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} rounded-lg bg-slate-900/60 text-slate-500`}>
+                    +{localBalances.length - (isMobile ? 6 : 12)} 更多
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Progress */}
+        <div className={`flex ${isMobile ? 'px-4 pt-3' : 'px-6 pt-4'} gap-1.5`}>
+          {[1, 2, 3, 4, 5].map((s) => (
+            <div
+              key={s}
+              className="h-1 flex-1 rounded-full transition-all duration-300"
+              style={s <= step ? { background: 'linear-gradient(90deg, #3b82f6 0%, #6366f1 100%)', boxShadow: '0 0 8px rgba(99,102,241,0.3)' } : { background: 'rgba(30,41,59,0.6)' }}
+            />
+          ))}
+        </div>
+
+        <div className={`${isMobile ? 'p-4 space-y-4' : 'p-6 space-y-6'}`}>
+          {/* Step 1: Select Exchange Account */}
+          {step === 1 && (
+            <>
+              <div>
+                <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>选择交易所账户</label>
+                <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-3`}>
+                  {isMobile ? '选择用于运行此策略的账户' : '选择用于运行此策略的交易所账户。策略将使用该账户的 API Key 进行交易。'}
+                </p>
+                {(!savedConfigs || savedConfigs.length === 0) ? (
+                  <div className={`${isMobile ? 'p-4' : 'p-6'} rounded-xl border border-dashed border-slate-700 text-center space-y-2`}>
+                    <p className={`text-slate-500 ${isMobile ? 'text-sm' : ''}`}>尚未配置任何交易所账户</p>
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>请先前往「账户管理」添加 API Key</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {savedConfigs.map((config) => {
+                      const cfg = getExchangeConfig(config.exchange || 'binance');
+                      const isSelected = selectedAccount?.id === config.id;
+                      return (
+                        <button
+                          key={config.id}
+                          className={`w-full flex items-center justify-between ${isMobile ? 'p-3' : 'p-4'} rounded-xl border text-left transition-all duration-200 ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-600/10 ring-1 ring-blue-500/30'
+                              : 'border-slate-800 bg-slate-800/30 hover:border-slate-600 hover:bg-slate-800/50'
+                          }`}
+                          onClick={() => handleSelectAccount(config)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className={isMobile ? 'text-xl' : 'text-2xl'}>{cfg.logo}</span>
+                            <div className="min-w-0">
+                              <p className={`${isMobile ? 'text-sm' : ''} font-medium flex items-center gap-1.5`}>
+                                <span className="truncate">{config.label}</span>
+                                <span className={`${isMobile ? 'text-xs px-1' : 'text-sm px-1.5'} py-0.5 rounded bg-slate-700/50 text-slate-400 shrink-0`}>
+                                  {cfg.name.split(' ')[0]}
+                                </span>
+                              </p>
+                              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mt-0.5`}>
+                                {config.apiKey.slice(0, 6)}...{config.apiKey.slice(-4)}
+                                {!isMobile && <span className="ml-3">{new Date(config.createdAt).toLocaleDateString('zh-CN')}</span>}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isSelected && (
+                              <span className={`${isMobile ? 'text-xs px-1.5' : 'text-sm px-2'} py-0.5 rounded-full bg-blue-600/20 text-blue-400 border border-blue-500/30`}>已选</span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              {selectedAccount && (
+                <div className={`${isMobile ? 'p-3' : 'p-4'} rounded-xl border ${
+                  checking ? 'bg-blue-600/5 border-blue-500/20' :
+                  connectionOk ? 'bg-emerald-600/5 border-emerald-500/20' :
+                  connectionError ? 'bg-red-600/5 border-red-500/20' :
+                  'bg-slate-800/30 border-slate-700/50'
+                }`}>
+                  {checking ? (
+                    <div className={`flex items-center gap-2 ${isMobile ? 'text-xs' : 'text-sm'} text-blue-400`}>
+                      <Loader2 className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} animate-spin`} />
+                      正在连接并验证 API ...
+                    </div>
+                  ) : connectionOk ? (
+                    <div className={isMobile ? 'space-y-2' : 'space-y-3'}>
+                      <div className="flex items-center justify-between">
+                        <div className={`flex items-center gap-2 ${isMobile ? 'text-xs' : 'text-sm'} text-emerald-400`}>
+                          <CheckCircle className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
+                          <span className="font-medium">
+                            {getExchangeConfig(selectedAccount.exchange || 'binance').logo} {isMobile ? '连接成功' : `${selectedAccount.label} 连接成功`}
+                          </span>
+                        </div>
+                        <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-bold text-blue-400`}>
+                          ${localTotalUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      {localBalances.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {localBalances.slice(0, isMobile ? 6 : 10).map((b) => (
+                            <div key={b.asset} className={`flex items-center gap-1.5 ${isMobile ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-sm'} rounded-lg bg-slate-900/60`}>
+                              <span className="font-medium text-slate-200">{b.asset}</span>
+                              <span className="text-slate-500">{parseFloat(b.free).toFixed(b.asset === 'USDT' || b.asset === 'USDC' ? 2 : isMobile ? 4 : 6)}</span>
+                              {b.usdtValue > 0.01 && !isMobile && <span className="text-slate-600">≈${b.usdtValue.toFixed(2)}</span>}
+                            </div>
+                          ))}
+                          {localBalances.length > (isMobile ? 6 : 10) && (
+                            <span className={`flex items-center ${isMobile ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-sm'} rounded-lg bg-slate-900/60 text-slate-500`}>+{localBalances.length - (isMobile ? 6 : 10)} 更多</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : connectionError ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-red-400">
+                        <AlertCircle className="w-4 h-4" />
+                        <span className="font-medium">连接失败</span>
+                      </div>
+                      <p className="text-sm text-red-400/80">{connectionError}</p>
+                      <button
+                        className="text-sm text-blue-400 hover:text-blue-300"
+                        onClick={() => handleCheckConnection(selectedAccount)}
+                      >
+                        重试连接
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-slate-400">
+                      <span>选择账户后将自动检测连接</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Step 2: Select Symbol & Fund */}
+          {step === 2 && (
+            <>
+              <div ref={dropdownRef}>
+                <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>交易对</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input
+                    ref={inputRef}
+                    className={`input-field pl-10 pr-16 ${symbol ? 'text-transparent' : ''}`}
+                    placeholder={symbol ? '' : '点击选择或输入币种，如 BTC、ETH'}
+                    value={symbol ? '' : symbolSearch}
+                    onChange={(e) => { setSymbolSearch(e.target.value); setShowDropdown(true); }}
+                    onFocus={() => { if (symbol) { handleClearSymbol(); } setShowDropdown(true); }}
+                  />
+                  {symbol && (
+                    <div className="absolute inset-y-0 left-10 flex items-center pointer-events-none">
+                      <span className="font-medium text-blue-400">{symbol.replace('USDT', '')}</span>
+                      <span className="text-slate-500">/USDT</span>
+                    </div>
+                  )}
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    {symbol && (
+                      <button
+                        className="p-1 rounded text-slate-500 hover:text-slate-300 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); handleClearSymbol(); setShowDropdown(true); }}
+                        title="清除"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button
+                      className="p-1 rounded text-slate-500 hover:text-slate-300 transition-colors"
+                      onClick={() => { setShowDropdown(!showDropdown); if (!showDropdown) inputRef.current?.focus(); }}
+                    >
+                      <ChevronDown className={`w-4 h-4 transition-transform ${showDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+                {showDropdown && (
+                  <div className="mt-1 rounded-xl max-h-60 overflow-y-auto" style={{ background: 'rgba(15,23,42,0.95)', border: '1px solid rgba(51,65,85,0.4)', boxShadow: '0 12px 40px -8px rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)' }}>
+                    {!symbolSearch.trim() && !symbol && (
+                      <div className="px-3 py-1.5 text-sm text-slate-500 border-b border-slate-700">热门交易对</div>
+                    )}
+                    {filteredSymbols.length > 0 ? filteredSymbols.map((s) => (
+                      <button
+                        key={s.symbol}
+                        className={`w-full text-left px-3 py-2.5 hover:bg-slate-700 text-sm flex items-center justify-between transition-colors ${
+                          symbol === s.symbol ? 'bg-blue-600/10 text-blue-400' : ''
+                        }`}
+                        onClick={() => { selectSymbol(s.symbol); setShowDropdown(false); }}
+                      >
+                        <div>
+                          <span className="font-medium">{s.baseAsset}</span>
+                          <span className="text-slate-500">/USDT</span>
+                        </div>
+                        {symbol === s.symbol && <span className="text-sm text-blue-400">已选</span>}
+                      </button>
+                    )) : (
+                      <div className="px-3 py-4 text-sm text-slate-500 text-center">未找到匹配的交易对</div>
+                    )}
+                  </div>
+                )}
+                {symbol && currentPrice > 0 && (
+                  <div className={`mt-2 flex ${isMobile ? 'flex-col gap-1' : 'items-center gap-4'} ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                    <span className="text-slate-400">当前价格: <span className="text-white font-mono">${currentPrice.toLocaleString()}</span></span>
+                    <span className="text-slate-400">
+                      波动率: <span className={volatility.level === '低' ? 'text-emerald-400' : volatility.level === '中' ? 'text-yellow-400' : 'text-red-400'}>
+                        {volatility.level} ({volatility.percent.toFixed(2)}%)
+                      </span>
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className={`grid ${isMobile ? 'grid-cols-1 gap-3' : 'grid-cols-2 gap-4'}`}>
+                <div>
+                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-1.5`}>策略名称</label>
+                  <input className="input-field" value={name} onChange={(e) => setName(e.target.value)} placeholder="我的网格策略" />
+                </div>
+                <div>
+                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-1.5`}>投入资金 (USDT)</label>
+                  <input className="input-field" type="number" value={totalFund} onChange={(e) => setTotalFund(Number(e.target.value))} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Step 3: Range Settings */}
+          {step === 3 && (
+            <>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300`}>开仓价</label>
+                  <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{isMobile ? '达到即触发策略' : '开仓价格达到即触发此策略'}</span>
+                </div>
+                <input
+                  className="input-field"
+                  type="number"
+                  step="0.01"
+                  placeholder="输入开仓价格"
+                  value={entryPrice || ''}
+                  onChange={(e) => setEntryPrice(Number(e.target.value))}
+                />
+                {currentPrice > 0 && entryPrice !== currentPrice && (
+                  <p className="text-sm text-slate-500 mt-1">
+                    当前市场价: <span className="text-slate-400 font-mono">${currentPrice.toLocaleString()}</span>
+                    <button
+                      className="ml-2 text-blue-400 hover:text-blue-300"
+                      onClick={() => setEntryPrice(currentPrice)}
+                    >
+                      重置为市场价
+                    </button>
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>区间模式</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([['fixed', '固定数值'], ['percentage', '百分比']] as const).map(([key, label]) => (
+                    <button
+                      key={key}
+                      className={`p-3 rounded-lg border text-sm transition-colors ${
+                        rangeMode === key ? 'border-blue-500 bg-blue-600/10 text-blue-400' : 'border-slate-700 hover:border-slate-600'
+                      }`}
+                      onClick={() => { setRangeMode(key); setUpperPrice(0); setLowerPrice(0); updateLayerPrices(0, 0); }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300`}>价格区间</label>
+                  {upperPrice > 0 && lowerPrice > 0 ? (
+                    <button
+                      className="flex items-center gap-1.5 text-sm text-red-400 hover:text-red-300 transition-colors"
+                      onClick={() => {
+                        setUpperPrice(0);
+                        setLowerPrice(0);
+                        updateLayerPrices(0, 0);
+                      }}
+                    >
+                      <Eraser className="w-3.5 h-3.5" />
+                      全部清除
+                    </button>
+                  ) : (
+                    <button
+                      className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                      onClick={() => {
+                        if (entryPrice <= 0) return;
+                        if (rangeMode === 'percentage') {
+                          setUpperPrice(30);
+                          setLowerPrice(-30);
+                          updateLayerPrices(-30, 30);
+                        } else {
+                          const up = +(entryPrice * 1.3).toFixed(2);
+                          const low = +(entryPrice * 0.7).toFixed(2);
+                          setUpperPrice(up);
+                          setLowerPrice(low);
+                          updateLayerPrices(low, up);
+                        }
+                      }}
+                    >
+                      <Wand2 className="w-3.5 h-3.5" />
+                      自动填充
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="relative">
+                    <input
+                      className={`input-field ${rangeMode === 'percentage' ? 'pr-8' : ''}`}
+                      type="number"
+                      step="0.01"
+                      placeholder="最高"
+                      value={upperPrice || ''}
+                      onChange={(e) => { const v = Number(e.target.value); setUpperPrice(v); updateLayerPrices(lowerPrice, v); }}
+                    />
+                    {rangeMode === 'percentage' && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none">%</span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <input
+                      className={`input-field ${rangeMode === 'percentage' ? 'pr-8' : ''}`}
+                      type="number"
+                      step="0.01"
+                      placeholder="最低"
+                      value={lowerPrice || ''}
+                      onChange={(e) => { const v = Number(e.target.value); setLowerPrice(v); updateLayerPrices(v, upperPrice); }}
+                    />
+                    {rangeMode === 'percentage' && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none">%</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {upperPrice > 0 && lowerPrice > 0 && (
+                <div className={`${isMobile ? 'p-2' : 'p-3'} rounded-lg bg-slate-800/50 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                  <p className="text-slate-400">
+                    区间宽度: <span className="text-white">{((upperPrice - lowerPrice) / currentPrice * 100).toFixed(1)}%</span>
+                    <span className="mx-2">|</span>
+                    中间价: <span className="text-white">${((upperPrice + lowerPrice) / 2).toFixed(2)}</span>
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Step 4: Grid Layers */}
+          {step === 4 && (
+            <>
+              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{isMobile ? '配置三层网格参数' : '配置三层网格的参数。每层有独立的网格数、区间和利润率。'}</p>
+              {layers.map((layer, i) => (
+                <div key={layer.layer} className={`rounded-xl border-l-4 ${layerColors[layer.layer]} transition-all duration-200 ${layer.enabled ? (isMobile ? 'p-3 space-y-2.5' : 'p-4 space-y-3') : (isMobile ? 'px-3 py-2.5' : 'px-4 py-3')}`} style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.6) 0%, rgba(30,41,59,0.3) 100%)', boxShadow: '0 2px 8px -2px rgba(0,0,0,0.15)' }}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={layer.enabled} onChange={(e) => updateLayer(i, { enabled: e.target.checked })} className="rounded" />
+                        <span className={`${isMobile ? 'text-sm' : ''} font-medium ${layer.enabled ? '' : 'text-slate-500'}`}>{layerNames[layer.layer]}</span>
+                      </label>
+                      {layer.enabled && (
+                        <button
+                          className="p-0.5 text-slate-500 hover:text-blue-400 transition-colors"
+                          onClick={() => setExpandedLayerInfo(expandedLayerInfo === layer.layer ? null : layer.layer)}
+                          title="查看说明"
+                        >
+                          <HelpCircle className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                    {layer.enabled ? (
+                      <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>资金 {Math.round(layer.fundRatio * 100)}%</span>
+                    ) : (
+                      <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>{isMobile ? '未启用' : '未启用 — 勾选以配置'}</span>
+                    )}
+                  </div>
+
+                  {layer.enabled && expandedLayerInfo === layer.layer && (
+                    <div className={`${isMobile ? 'px-2 py-2 text-xs' : 'px-3 py-2.5 text-sm'} rounded-lg bg-slate-900/60 border border-slate-700/50 text-slate-400 leading-relaxed`}>
+                      {layerDescriptions[layer.layer]}
+                    </div>
+                  )}
+
+                  {layer.enabled && (
+                    <div className="space-y-3">
+                      {/* Row 1: Grid count, fund ratio */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>网格数量</label>
+                          <input className="input-field text-sm mt-1" type="number" value={layer.gridCount} onChange={(e) => updateLayer(i, { gridCount: Number(e.target.value) })} />
+                        </div>
+                        <div className="relative">
+                          <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>资金比例%</label>
+                          <input
+                            className="input-field text-sm mt-1 pr-8"
+                            type="number"
+                            step="5"
+                            min="0"
+                            max="100"
+                            value={Math.round(layer.fundRatio * 100)}
+                            onChange={(e) => {
+                              const pct = Math.min(100, Math.max(0, Number(e.target.value)));
+                              updateLayer(i, { fundRatio: pct / 100 });
+                            }}
+                          />
+                          <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>
+                        </div>
+                      </div>
+
+                      {/* Row 2: Layer price range with ratio */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>本层价格区间</label>
+                          <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600`}>
+                            {entryPrice > 0 && upperPrice > 0 && lowerPrice > 0
+                              ? `以开仓区间为基数的 ${Math.round(layer.rangeRatio * 100)}%`
+                              : '请先在步骤3设置开仓区间'}
+                          </span>
+                        </div>
+                        {/* Range ratio slider */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 whitespace-nowrap`}>区间比例</label>
+                          <input
+                            type="range"
+                            className="flex-1 h-1.5 accent-blue-500"
+                            min="10"
+                            max="200"
+                            step="5"
+                            value={Math.round(layer.rangeRatio * 100)}
+                            onChange={(e) => {
+                              const ratio = Number(e.target.value) / 100;
+                              if (entryPrice > 0 && upperPrice > 0 && lowerPrice > 0) {
+                                const halfRange = (upperPrice - lowerPrice) / 2 * ratio;
+                                const center = entryPrice;
+                                updateLayer(i, {
+                                  rangeRatio: ratio,
+                                  upperPrice: +(center + halfRange).toFixed(2),
+                                  lowerPrice: +(center - halfRange).toFixed(2),
+                                });
+                              } else {
+                                updateLayer(i, { rangeRatio: ratio });
+                              }
+                            }}
+                          />
+                          <div className="relative w-20">
+                            <input
+                              className="input-field text-sm pr-7 text-center"
+                              type="number"
+                              step="5"
+                              min="10"
+                              max="200"
+                              value={Math.round(layer.rangeRatio * 100)}
+                              onChange={(e) => {
+                                const ratio = Math.min(200, Math.max(10, Number(e.target.value))) / 100;
+                                if (entryPrice > 0 && upperPrice > 0 && lowerPrice > 0) {
+                                  const halfRange = (upperPrice - lowerPrice) / 2 * ratio;
+                                  const center = entryPrice;
+                                  updateLayer(i, {
+                                    rangeRatio: ratio,
+                                    upperPrice: +(center + halfRange).toFixed(2),
+                                    lowerPrice: +(center - halfRange).toFixed(2),
+                                  });
+                                } else {
+                                  updateLayer(i, { rangeRatio: ratio });
+                                }
+                              }}
+                            />
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none">%</span>
+                          </div>
+                        </div>
+                        {/* Computed price display */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 mb-0.5 block`}>上界价格</label>
+                            <input
+                              className="input-field text-sm"
+                              type="number"
+                              step="0.01"
+                              placeholder="上界价格"
+                              value={layer.upperPrice || ''}
+                              onChange={(e) => updateLayer(i, { upperPrice: Number(e.target.value) })}
+                            />
+                          </div>
+                          <div>
+                            <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 mb-0.5 block`}>下界价格</label>
+                            <input
+                              className="input-field text-sm"
+                              type="number"
+                              step="0.01"
+                              placeholder="下界价格"
+                              value={layer.lowerPrice || ''}
+                              onChange={(e) => updateLayer(i, { lowerPrice: Number(e.target.value) })}
+                            />
+                          </div>
+                        </div>
+                        {layer.upperPrice > 0 && layer.lowerPrice > 0 && layer.gridCount > 0 && (
+                          <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 mt-1`}>
+                            每格 ≈ ${((layer.upperPrice - layer.lowerPrice) / layer.gridCount).toFixed(4)}
+                            <span className="mx-2">|</span>
+                            宽度 {((layer.upperPrice - layer.lowerPrice) / entryPrice * 100).toFixed(1)}%
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Row 3: Profit mode selector */}
+                      <div>
+                        <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 block mb-1`}>利润模式</label>
+                        <div className={`grid ${isMobile ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'} gap-1.5`}>
+                          {([
+                            ['fixed_rate', '固定利润率'],
+                            ['per_grid', '每格独立'],
+                            ['distance_increase', '距离递增'],
+                            ['trend_increase', '趋势模式'],
+                          ] as const).map(([key, label]) => (
+                            <button
+                              key={key}
+                              className={`px-2 py-1.5 rounded-lg text-sm transition-colors border ${
+                                layer.profitMode === key
+                                  ? 'border-blue-500 bg-blue-600/10 text-blue-400'
+                                  : 'border-slate-700 text-slate-400 hover:border-slate-600'
+                              }`}
+                              onClick={() => updateLayer(i, { profitMode: key })}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Row 4: Profit mode specific config */}
+                      <div className={`rounded-lg bg-slate-900/40 border border-slate-700/30 ${isMobile ? 'p-2.5' : 'p-3'}`}>
+                        {layer.profitMode === 'fixed_rate' && (() => {
+                          const autoRate = (layer.upperPrice > 0 && layer.lowerPrice > 0 && layer.gridCount > 0)
+                            ? +((layer.upperPrice - layer.lowerPrice) / layer.gridCount / ((layer.upperPrice + layer.lowerPrice) / 2) * 100).toFixed(2)
+                            : 0;
+                          return (
+                            <div>
+                              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-2`}>{isMobile ? '固定利润率，由区间÷网格数自动计算' : '每笔交易使用统一的固定利润率，由区间宽度 ÷ 网格数自动计算'}</p>
+                              <div className={`relative ${isMobile ? 'w-full' : 'w-48'}`}>
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>每格利润率（自动）</label>
+                                <input
+                                  className="input-field text-sm mt-1 pr-8 bg-slate-800/60 text-slate-300 cursor-not-allowed"
+                                  type="text"
+                                  readOnly
+                                  value={autoRate > 0 ? autoRate : '请先设置价格区间'}
+                                />
+                                {autoRate > 0 && <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {layer.profitMode === 'per_grid' && (
+                          <div>
+                            <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-2`}>{isMobile ? '每格独立利润率，系统自动线性分配' : '每格设置独立的利润率范围，靠近开仓价的格子利润率低，靠近边界的格子利润率高，系统自动线性分配'}</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="relative">
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>最小利润率</label>
+                                <input
+                                  className="input-field text-sm mt-1 pr-8"
+                                  type="number"
+                                  step="0.1"
+                                  value={layer.perGridMinRate}
+                                  onChange={(e) => updateLayer(i, { perGridMinRate: Number(e.target.value) })}
+                                />
+                                <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>
+                              </div>
+                              <div className="relative">
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>最大利润率</label>
+                                <input
+                                  className="input-field text-sm mt-1 pr-8"
+                                  type="number"
+                                  step="0.1"
+                                  value={layer.perGridMaxRate}
+                                  onChange={(e) => updateLayer(i, { perGridMaxRate: Number(e.target.value) })}
+                                />
+                                <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {layer.profitMode === 'distance_increase' && (
+                          <div>
+                            <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-2`}>{isMobile ? '距离越远利润率越高，不超过上限' : '离开仓价越远的网格，利润率越高。从基础利润率开始，每远离一格递增指定百分比，不超过最大上限'}</p>
+                            <div className={`grid ${isMobile ? 'grid-cols-3' : 'grid-cols-3'} gap-2`}>
+                              <div className="relative">
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>基础率</label>
+                                <input
+                                  className="input-field text-sm mt-1 pr-8"
+                                  type="number"
+                                  step="0.1"
+                                  value={layer.distBaseRate}
+                                  onChange={(e) => updateLayer(i, { distBaseRate: Number(e.target.value) })}
+                                />
+                                <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>
+                              </div>
+                              <div className="relative">
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>每格递增</label>
+                                <input
+                                  className="input-field text-sm mt-1 pr-8"
+                                  type="number"
+                                  step="0.1"
+                                  value={layer.distIncreaseStep}
+                                  onChange={(e) => updateLayer(i, { distIncreaseStep: Number(e.target.value) })}
+                                />
+                                <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>
+                              </div>
+                              <div className="relative">
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>上限</label>
+                                <input
+                                  className="input-field text-sm mt-1 pr-8"
+                                  type="number"
+                                  step="0.1"
+                                  value={layer.distMaxRate}
+                                  onChange={(e) => updateLayer(i, { distMaxRate: Number(e.target.value) })}
+                                />
+                                <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {layer.profitMode === 'trend_increase' && (
+                          <div>
+                            <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mb-2`}>{isMobile ? '根据趋势动态调整利润率' : '根据市场趋势动态调整利润率。实际利润率 = 基础利润率 × 调整比例'}</p>
+                            <div className={`grid grid-cols-3 gap-2`}>
+                              <div className="relative">
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>基础率</label>
+                                <input
+                                  className="input-field text-sm mt-1 pr-8"
+                                  type="number"
+                                  step="0.1"
+                                  value={layer.trendBaseRate}
+                                  onChange={(e) => updateLayer(i, { trendBaseRate: Number(e.target.value) })}
+                                />
+                                <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>
+                              </div>
+                              <div className="relative">
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{isMobile ? '涨时比例' : '上涨时调整比例'}</label>
+                                <input
+                                  className="input-field text-sm mt-1 pr-8"
+                                  type="number"
+                                  step="5"
+                                  value={Math.round(layer.trendBullMultiplier * 100)}
+                                  onChange={(e) => updateLayer(i, { trendBullMultiplier: Number(e.target.value) / 100 })}
+                                />
+                                <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>
+                              </div>
+                              <div className="relative">
+                                <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>{isMobile ? '跌时比例' : '下跌时调整比例'}</label>
+                                <input
+                                  className="input-field text-sm mt-1 pr-8"
+                                  type="number"
+                                  step="5"
+                                  value={Math.round(layer.trendBearMultiplier * 100)}
+                                  onChange={(e) => updateLayer(i, { trendBearMultiplier: Number(e.target.value) / 100 })}
+                                />
+                                <span className="absolute right-3 bottom-2.5 text-slate-500 text-sm pointer-events-none">%</span>
+                              </div>
+                            </div>
+                            <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-600 mt-2`}>
+                              示例：{layer.trendBaseRate}%×{Math.round(layer.trendBullMultiplier * 100)}%={(layer.trendBaseRate * layer.trendBullMultiplier).toFixed(1)}%，
+                              {layer.trendBaseRate}%×{Math.round(layer.trendBearMultiplier * 100)}%={(layer.trendBaseRate * layer.trendBearMultiplier).toFixed(1)}%
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* Step 5: Profit & Risk */}
+          {step === 5 && (
+            <>
+              <div>
+                <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>利润分配模式</label>
+                <select className="select-field" value={profitAllocation} onChange={(e) => setProfitAllocation(e.target.value as ProfitAllocation)}>
+                  <option value="all_usdt">全部转为 USDT</option>
+                  <option value="all_coin">全部转为币</option>
+                  <option value="ratio">按比例分配</option>
+                  <option value="reinvest">自动滚动投入</option>
+                  <option value="threshold_switch">阈值切换</option>
+                </select>
+              </div>
+
+              {profitAllocation === 'reinvest' && (
+                <div className={isMobile ? 'space-y-2' : 'space-y-3'}>
+                  <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>选择利润滚动投入的方式</p>
+                  <div className={`grid ${isMobile ? 'grid-cols-1 gap-2' : 'grid-cols-2 gap-3'}`}>
+                    <button
+                      className={`${isMobile ? 'p-2.5' : 'p-3'} rounded-lg border ${isMobile ? 'text-xs' : 'text-sm'} text-left transition-colors ${
+                        reinvestMode === 'per_grid'
+                          ? 'border-blue-500 bg-blue-600/10 text-blue-400'
+                          : 'border-slate-700 hover:border-slate-600 text-slate-400'
+                      }`}
+                      onClick={() => setReinvestMode('per_grid')}
+                    >
+                      <span className="font-medium block">投入当前网格</span>
+                      <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mt-1 block`}>{isMobile ? '逐格复投滚大' : '利润属于哪一格，就在这一格进行复投，逐格滚大'}</span>
+                    </button>
+                    <button
+                      className={`${isMobile ? 'p-2.5' : 'p-3'} rounded-lg border ${isMobile ? 'text-xs' : 'text-sm'} text-left transition-colors ${
+                        reinvestMode === 'whole_strategy'
+                          ? 'border-blue-500 bg-blue-600/10 text-blue-400'
+                          : 'border-slate-700 hover:border-slate-600 text-slate-400'
+                      }`}
+                      onClick={() => setReinvestMode('whole_strategy')}
+                    >
+                      <span className="font-medium block">投入整个策略</span>
+                      <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 mt-1 block`}>{isMobile ? '融入资金池等比例滚动' : '利润自动融入整个策略资金池，所有网格等比例滚动'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {profitAllocation === 'threshold_switch' && (
+                <div className={isMobile ? 'space-y-2' : 'space-y-3'}>
+                  <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500`}>
+                    {isMobile ? '低于持币价全部持币，高于持U价全部卖出' : '价格低于持币价格时，利润全部持币不卖出；价格高于持U价格时，利润部分全部卖出持有 USDT'}
+                  </p>
+                  <div className={`grid ${isMobile ? 'grid-cols-1 gap-3' : 'grid-cols-2 gap-4'}`}>
+                    <div>
+                      <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 block mb-1`}>{isMobile ? '持币价格' : '持币价格（低于此价全部持币）'}</label>
+                      <input
+                        className="input-field text-sm"
+                        type="number"
+                        step="0.01"
+                        placeholder={entryPrice > 0 ? `默认 ${(entryPrice * 0.75).toFixed(2)}` : '请先设置开仓价'}
+                        value={thresholdHoldCoinPrice || ''}
+                        onChange={(e) => setThresholdHoldCoinPrice(Number(e.target.value))}
+                      />
+                      {entryPrice > 0 && (
+                        <p className="text-sm text-slate-600 mt-1">开仓价 -25% = {(entryPrice * 0.75).toFixed(2)}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className={`${isMobile ? 'text-xs' : 'text-sm'} text-slate-500 block mb-1`}>{isMobile ? '持U价格' : '持U价格（高于此价利润全部持U）'}</label>
+                      <input
+                        className="input-field text-sm"
+                        type="number"
+                        step="0.01"
+                        placeholder={entryPrice > 0 ? `默认 ${(entryPrice * 1.25).toFixed(2)}` : '请先设置开仓价'}
+                        value={thresholdHoldUsdtPrice || ''}
+                        onChange={(e) => setThresholdHoldUsdtPrice(Number(e.target.value))}
+                      />
+                      {entryPrice > 0 && (
+                        <p className="text-sm text-slate-600 mt-1">开仓价 +25% = {(entryPrice * 1.25).toFixed(2)}</p>
+                      )}
+                    </div>
+                  </div>
+                  {entryPrice > 0 && !thresholdHoldCoinPrice && !thresholdHoldUsdtPrice && (
+                    <button
+                      className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                      onClick={() => {
+                        setThresholdHoldCoinPrice(+(entryPrice * 0.75).toFixed(2));
+                        setThresholdHoldUsdtPrice(+(entryPrice * 1.25).toFixed(2));
+                      }}
+                    >
+                      一键填入默认值（开仓价 ±25%）
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {profitAllocation === 'ratio' && (
+                <div>
+                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>USDT 占比: {profitRatio}%</label>
+                  <input type="range" className="w-full" min="0" max="100" value={profitRatio} onChange={(e) => setProfitRatio(Number(e.target.value))} />
+                  <div className="flex justify-between text-sm text-slate-500 mt-1">
+                    <span>100% 币</span>
+                    <span>100% USDT</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>区间突破</label>
+                  <label className={`flex items-center gap-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                    <input type="checkbox" checked={autoRebalance} onChange={(e) => setAutoRebalance(e.target.checked)} className="rounded" />
+                    自动再平衡
+                  </label>
+                </div>
+                <div>
+                  <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-slate-300 block mb-2`}>结束模式</label>
+                  <select className="select-field" value={endMode} onChange={(e) => setEndMode(e.target.value as EndMode)}>
+                    <option value="hold_coin">全部持币</option>
+                    <option value="hold_usdt">全部持USDT</option>
+                    <option value="keep_position">保持当前仓位</option>
+                    <option value="force_close">强制清仓</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className={`${isMobile ? 'p-3' : 'p-4'} rounded-xl space-y-2`} style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(99,102,241,0.05) 100%)', border: '1px solid rgba(59,130,246,0.2)', boxShadow: '0 0 20px -4px rgba(59,130,246,0.1)' }}>
+                <h4 className={`${isMobile ? 'text-sm' : ''} font-medium text-blue-400`}>策略摘要</h4>
+                <div className={`grid grid-cols-2 gap-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                  <p className="text-slate-400">交易对: <span className="text-white">{symbol}</span></p>
+                  <p className="text-slate-400">资金: <span className="text-white">{totalFund} USDT</span></p>
+                  <p className="text-slate-400">区间: <span className="text-white">{lowerPrice.toFixed(2)} - {upperPrice.toFixed(2)}</span></p>
+                  <p className="text-slate-400">网格总数: <span className="text-white">{layers.filter((l) => l.enabled).reduce((a, l) => a + l.gridCount, 0)}</span></p>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className={`flex items-center justify-between ${isMobile ? 'px-4 py-3' : 'p-6'} sticky bottom-0`} style={{ borderTop: '1px solid rgba(51,65,85,0.3)', background: 'linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(10,15,30,0.96) 100%)', backdropFilter: 'blur(12px)' }}>
+          <button
+            className="btn-secondary"
+            onClick={() => step > 1 ? setStep(step - 1) : onCancel()}
+          >
+            {step > 1 ? '上一步' : '取消'}
+          </button>
+          {step < 5 ? (
+            <button
+              className="btn-primary"
+              onClick={() => setStep(step + 1)}
+              disabled={
+                (step === 1 && (!selectedAccount || !connectionOk || checking)) ||
+                (step === 2 && (!symbol || !name || totalFund <= 0))
+              }
+            >
+              下一步
+            </button>
+          ) : (
+            <button className="btn-success" onClick={handleCreate}>
+              创建策略
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

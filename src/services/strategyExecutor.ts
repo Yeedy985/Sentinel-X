@@ -1,0 +1,1095 @@
+import { db } from '../db';
+import { placeOrder, getPrice, cancelOrder, setCurrentExchange, getKlines, queryOrder, getAllOrders, getExchangeInfo, getMyTrades } from './binance';
+import { generateGridOrders, detectTrend, formatQuantity, formatPrice } from './gridEngine';
+import type { Strategy, GridOrder, ApiConfig, SymbolInfo } from '../types';
+
+// ==================== 执行引擎状态 ====================
+interface ExecutorState {
+  intervalId: ReturnType<typeof setInterval> | null;
+  running: boolean;
+}
+
+const _executors: Map<number, ExecutorState> = new Map();
+const _checkLocks: Map<number, boolean> = new Map(); // 防并发锁
+let _onStrategyUpdate: ((strategy: Strategy) => void) | null = null;
+let _onLog: ((strategyId: number, msg: string) => void) | null = null;
+
+export function setExecutorCallbacks(opts: {
+  onStrategyUpdate: (strategy: Strategy) => void;
+  onLog?: (strategyId: number, msg: string) => void;
+}) {
+  _onStrategyUpdate = opts.onStrategyUpdate;
+  _onLog = opts.onLog || null;
+}
+
+function log(strategyId: number, msg: string) {
+  const ts = new Date().toLocaleTimeString('zh-CN');
+  console.log(`[策略${strategyId}][${ts}] ${msg}`);
+  _onLog?.(strategyId, msg);
+}
+
+// 获取某个订单的手续费（从 myTrades 接口）
+async function fetchOrderFee(apiKey: string, apiSecret: string, symbol: string, orderId: string): Promise<{ fee: number; feeAsset: string }> {
+  try {
+    const trades = await getMyTrades(apiKey, apiSecret, symbol, orderId);
+    if (!trades || trades.length === 0) return { fee: 0, feeAsset: 'USDT' };
+    let totalFee = 0;
+    let feeAsset = 'USDT';
+    for (const t of trades) {
+      totalFee += parseFloat(t.commission || '0');
+      feeAsset = t.commissionAsset || feeAsset;
+    }
+    return { fee: totalFee, feeAsset };
+  } catch {
+    return { fee: 0, feeAsset: 'USDT' };
+  }
+}
+
+// ==================== 启动策略 ====================
+export async function startStrategy(strategy: Strategy, apiConfig: ApiConfig, symbolInfo?: SymbolInfo): Promise<void> {
+  if (!strategy.id) throw new Error('策略缺少 ID');
+  if (_executors.get(strategy.id)?.running) {
+    log(strategy.id, '策略已在运行中');
+    return;
+  }
+
+  const exchange = apiConfig.exchange || 'binance';
+  setCurrentExchange(exchange);
+  log(strategy.id, `启动策略: ${strategy.name} (${strategy.symbol})`);
+
+  // 1. 获取当前价格
+  let currentPrice: number;
+  try {
+    currentPrice = await getPrice(strategy.symbol);
+    log(strategy.id, `当前价格: $${currentPrice}`);
+  } catch (err: any) {
+    log(strategy.id, `获取价格失败: ${err.message}`);
+    throw err;
+  }
+
+  // 2. 获取趋势
+  let trend: 'bull' | 'bear' | 'neutral' = 'neutral';
+  try {
+    const klines = await getKlines(strategy.symbol, '1h', 30);
+    const closes = klines.map(k => k.close);
+    trend = detectTrend(closes, strategy.risk.trendDefenseEmaFast, strategy.risk.trendDefenseEmaSlow);
+    log(strategy.id, `市场趋势: ${trend}`);
+  } catch {
+    log(strategy.id, '趋势检测失败，使用 neutral');
+  }
+
+  // 3. 清理旧的 pending 订单
+  const existingOrders = await db.gridOrders.where('strategyId').equals(strategy.id).toArray();
+  const pendingOrders = existingOrders.filter(o => o.status === 'placed' && o.binanceOrderId);
+  if (pendingOrders.length > 0) {
+    log(strategy.id, `取消 ${pendingOrders.length} 个旧挂单...`);
+    for (const order of pendingOrders) {
+      try {
+        await cancelOrder(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, order.binanceOrderId!);
+      } catch {
+        // 忽略取消失败（可能已成交或已取消）
+      }
+    }
+  }
+  // 只删除非 filled 的订单，保留已成交的历史记录
+  const nonFilledOrders = existingOrders.filter(o => o.status !== 'filled');
+  if (nonFilledOrders.length > 0) {
+    await db.gridOrders.bulkDelete(nonFilledOrders.map(o => o.id!));
+  }
+
+  // 4. 为每个启用的层生成网格订单
+  const allOrders: Omit<GridOrder, 'id'>[] = [];
+  for (const layer of strategy.layers) {
+    if (!layer.enabled) continue;
+    const orders = generateGridOrders(strategy, currentPrice, layer, trend);
+    allOrders.push(...orders);
+    log(strategy.id, `${layer.layer}层: 生成 ${orders.length} 个网格订单`);
+  }
+
+  if (allOrders.length === 0) {
+    log(strategy.id, '没有生成任何订单，请检查层配置');
+    throw new Error('没有生成任何网格订单');
+  }
+
+  // 5. 保存到本地 DB
+  const orderIds = await db.gridOrders.bulkAdd(allOrders as GridOrder[], { allKeys: true });
+  const savedOrders: GridOrder[] = allOrders.map((o, i) => ({ ...o, id: orderIds[i] as number })) as GridOrder[];
+
+  // 6. 向交易所下单
+  const tickSize = symbolInfo?.tickSize || '0.01';
+  const stepSize = symbolInfo?.stepSize || '0.00001';
+  const pricePrecision = tickSize.indexOf('1') - tickSize.indexOf('.');
+  const minNotional = symbolInfo?.minNotional || 1;
+
+  let placedCount = 0;
+  let skippedCount = 0;
+  let errorCount = 0;
+
+  for (const order of savedOrders) {
+    const qty = parseFloat(formatQuantity(order.quantity, stepSize));
+    const price = parseFloat(formatPrice(order.price, pricePrecision));
+    const notional = qty * price;
+
+    // 跳过小于最小名义价值的订单
+    if (notional < minNotional) {
+      await db.gridOrders.update(order.id!, { status: 'cancelled', updatedAt: Date.now() });
+      skippedCount++;
+      continue;
+    }
+
+    try {
+      const result = await placeOrder({
+        apiKey: apiConfig.apiKey,
+        apiSecretEncrypted: apiConfig.apiSecret,
+        symbol: strategy.symbol,
+        side: order.side === 'buy' ? 'BUY' : 'SELL',
+        type: 'LIMIT',
+        quantity: formatQuantity(order.quantity, stepSize),
+        price: formatPrice(order.price, pricePrecision),
+        timeInForce: 'GTC',
+      });
+
+      await db.gridOrders.update(order.id!, {
+        status: 'placed',
+        binanceOrderId: String(result.orderId),
+        updatedAt: Date.now(),
+      });
+      placedCount++;
+    } catch (err: any) {
+      log(strategy.id, `下单失败 [${order.side} ${order.price}]: ${err.message}`);
+      await db.gridOrders.update(order.id!, { status: 'error', updatedAt: Date.now() });
+      errorCount++;
+    }
+
+    // 避免触发交易所限频
+    await sleep(200);
+  }
+
+  log(strategy.id, `下单完成: 成功 ${placedCount}, 跳过 ${skippedCount}, 失败 ${errorCount}`);
+
+  // 7. 更新策略状态
+  const updateFields = {
+    status: 'running' as const,
+    startedAt: Date.now(),
+    usedFund: placedCount > 0 ? strategy.totalFund : 0,
+  };
+  await db.strategies.update(strategy.id, updateFields);
+  const updatedStrategy = await db.strategies.get(strategy.id);
+  if (updatedStrategy) _onStrategyUpdate?.(updatedStrategy);
+
+  // 8. 启动订单监控循环
+  startMonitorLoop(strategy.id, apiConfig, symbolInfo);
+}
+
+// ==================== 订单监控循环 ====================
+export function startMonitorLoop(strategyId: number, apiConfig: ApiConfig, symbolInfo?: SymbolInfo) {
+  if (_executors.get(strategyId)?.running) return;
+
+  const state: ExecutorState = { running: true, intervalId: null };
+  _executors.set(strategyId, state);
+
+  // 立即执行一次: 修复丢失记录 + 检查成交 + 重算利润
+  (async () => {
+    try {
+      // 修复: 检查 filled 的 gridOrders 是否缺少 tradeRecord，补全丢失的记录
+      await repairMissingTradeRecords(strategyId, apiConfig, symbolInfo);
+      await checkAndProcessOrders(strategyId, apiConfig, symbolInfo);
+      await updateStrategyProfit(strategyId);
+    } catch (err: any) {
+      log(strategyId, `首次检查异常: ${err.message}`);
+    }
+  })();
+
+  // 每 10 秒检查一次订单状态
+  state.intervalId = setInterval(async () => {
+    try {
+      await checkAndProcessOrders(strategyId, apiConfig, symbolInfo);
+    } catch (err: any) {
+      log(strategyId, `监控异常: ${err.message}`);
+    }
+  }, 10000);
+
+  log(strategyId, '订单监控已启动 (10s 轮询)');
+}
+
+// ==================== 从币安同步丢失的成交记录 ====================
+export async function repairMissingTradeRecords(strategyId: number, apiConfig: ApiConfig, symbolInfo?: SymbolInfo) {
+  const strategy = await db.strategies.get(strategyId);
+  if (!strategy) return;
+
+  // 确保交易所已设置
+  setCurrentExchange(apiConfig.exchange || 'binance');
+
+  // 自行获取 symbolInfo（如果未传入）
+  let si = symbolInfo;
+  if (!si) {
+    try {
+      const allSymbols = await getExchangeInfo();
+      si = allSymbols.find(s => s.symbol === strategy.symbol);
+    } catch (err: any) {
+      log(strategyId, `获取交易对信息失败: ${err.message}`);
+    }
+  }
+
+  const tickSize = si?.tickSize || '0.00001';
+  const stepSize = si?.stepSize || '0.00001';
+  const pricePrecision = tickSize.indexOf('1') - tickSize.indexOf('.');
+  const minNotional = si?.minNotional || 1;
+
+  log(strategyId, `开始同步币安订单状态 (${strategy.symbol}), pricePrecision=${pricePrecision}, minNotional=${minNotional}`);
+
+  // ===== Step 1: 逐个检查本地 placed 订单的真实状态 =====
+  const placedOrders = await db.gridOrders
+    .where('strategyId').equals(strategyId)
+    .filter(o => o.status === 'placed' && !!o.binanceOrderId)
+    .toArray();
+
+  // 获取已有 tradeRecords 用于去重
+  const existingTrades = await db.tradeRecords.where('strategyId').equals(strategyId).toArray();
+  const existingTradeIds = new Set(existingTrades.map(t => t.binanceTradeId));
+
+  let syncedCount = 0;
+  let cancelledCount = 0;
+
+  console.log(`[同步] 检查 ${placedOrders.length} 个本地 placed 订单`);
+
+  for (const order of placedOrders) {
+    let result: any;
+    try {
+      result = await queryOrder(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, order.binanceOrderId!);
+    } catch (err: any) {
+      console.log(`[同步] 查询失败 #${order.binanceOrderId}: ${err.message}`);
+      await sleep(100);
+      continue;
+    }
+
+    const status = result.status; // NEW, PARTIALLY_FILLED, FILLED, CANCELED, EXPIRED, REJECTED
+
+    if (status === 'FILLED') {
+      // 订单已成交 — 更新本地状态 + 补 tradeRecord
+      const executedQty = parseFloat(result.executedQty || '0');
+      const cummQuoteQty = parseFloat(result.cummulativeQuoteQty || '0');
+      const actualPrice = executedQty > 0 ? (cummQuoteQty / executedQty) : order.price;
+      const filledQty = executedQty > 0 ? executedQty : order.quantity;
+      const orderTime = result.updateTime || result.time || Date.now();
+
+      await db.gridOrders.update(order.id!, {
+        status: 'filled',
+        filledQuantity: filledQty,
+        updatedAt: orderTime,
+      });
+
+      // 只有没有对应 tradeRecord 时才补创建
+      if (!existingTradeIds.has(order.binanceOrderId!)) {
+        const feeInfo = await fetchOrderFee(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, order.binanceOrderId!);
+        await db.tradeRecords.add({
+          strategyId,
+          layer: order.layer,
+          gridIndex: order.gridIndex,
+          side: order.side,
+          price: actualPrice,
+          quantity: filledQty,
+          quoteAmount: actualPrice * filledQty,
+          profit: 0,
+          fee: feeInfo.fee,
+          feeAsset: feeInfo.feeAsset,
+          binanceTradeId: order.binanceOrderId!,
+          timestamp: orderTime,
+        });
+        existingTradeIds.add(order.binanceOrderId!);
+      }
+
+      // 检查是否已有反向单 → 没有就直接挂到币安
+      if (order.targetPrice && order.targetPrice > 0) {
+        const reverseSide = order.side === 'buy' ? 'sell' : 'buy';
+        const existingReverse = await db.gridOrders
+          .where('strategyId').equals(strategyId)
+          .filter(o =>
+            o.layer === order.layer &&
+            o.gridIndex === order.gridIndex &&
+            o.side === reverseSide &&
+            (o.status === 'placed' || o.status === 'pending')
+          )
+          .count();
+
+        if (existingReverse === 0) {
+          const reversePrice = order.targetPrice;
+          const qty = parseFloat(formatQuantity(filledQty, stepSize));
+          const notional = qty * reversePrice;
+
+          if (notional >= minNotional) {
+            try {
+              const placeResult = await placeOrder({
+                apiKey: apiConfig.apiKey,
+                apiSecretEncrypted: apiConfig.apiSecret,
+                symbol: strategy.symbol,
+                side: reverseSide === 'buy' ? 'BUY' : 'SELL',
+                type: 'LIMIT',
+                quantity: formatQuantity(filledQty, stepSize),
+                price: formatPrice(reversePrice, pricePrecision),
+                timeInForce: 'GTC',
+              });
+
+              await db.gridOrders.add({
+                strategyId,
+                layer: order.layer,
+                gridIndex: order.gridIndex,
+                side: reverseSide,
+                price: reversePrice,
+                quantity: filledQty,
+                filledQuantity: 0,
+                status: 'placed',
+                targetPrice: actualPrice,
+                profitRate: order.profitRate,
+                binanceOrderId: String(placeResult.orderId),
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+              });
+              log(strategyId, `挂出反向单: ${reverseSide} ${order.layer}#${order.gridIndex} @ $${reversePrice.toFixed(pricePrecision)}`);
+            } catch (err: any) {
+              log(strategyId, `反向挂单失败: ${err.message}`);
+            }
+            await sleep(200);
+          }
+        }
+      }
+
+      syncedCount++;
+      log(strategyId, `同步成交: ${order.side} ${order.layer}#${order.gridIndex} @ $${actualPrice.toFixed(5)} qty=${filledQty}`);
+
+    } else if (status === 'CANCELED' || status === 'EXPIRED' || status === 'REJECTED') {
+      // 订单已取消/过期 — 更新本地状态
+      await db.gridOrders.update(order.id!, { status: 'cancelled', updatedAt: Date.now() });
+      cancelledCount++;
+
+    }
+    // status === 'NEW' 或 'PARTIALLY_FILLED' 的保持 placed 不变
+
+    await sleep(100); // 避免 API 限频
+  }
+
+  // ===== Step 2: 从币安 allOrders 补全已被本地删除的 gridOrders 对应的成交 =====
+  try {
+    const allBinanceOrders = await getAllOrders(
+      apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, strategy.startedAt || undefined
+    );
+
+    const filledBinanceOrders = allBinanceOrders.filter((o: any) => o.status === 'FILLED');
+
+    for (const binOrder of filledBinanceOrders) {
+      const orderId = String(binOrder.orderId);
+      if (existingTradeIds.has(orderId)) continue;
+
+      const executedQty = parseFloat(binOrder.executedQty || '0');
+      const cummQuoteQty = parseFloat(binOrder.cummulativeQuoteQty || '0');
+      const actualPrice = executedQty > 0 ? (cummQuoteQty / executedQty) : 0;
+      if (executedQty <= 0 || actualPrice <= 0) continue;
+
+      const side = binOrder.side === 'BUY' ? 'buy' : 'sell';
+      const orderTime = binOrder.updateTime || binOrder.time || Date.now();
+
+      // 查找本地 gridOrder 获取网格层信息
+      const localGridOrders = await db.gridOrders
+        .where('strategyId').equals(strategyId)
+        .filter(o => o.binanceOrderId === orderId)
+        .toArray();
+      const gridOrder = localGridOrders[0];
+      const layer = gridOrder?.layer || 'inner';
+      const gridIndex = gridOrder?.gridIndex || 0;
+
+      const feeInfo2 = await fetchOrderFee(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, orderId);
+      await db.tradeRecords.add({
+        strategyId,
+        layer: layer as any,
+        gridIndex,
+        side: side as any,
+        price: actualPrice,
+        quantity: executedQty,
+        quoteAmount: actualPrice * executedQty,
+        profit: 0,
+        fee: feeInfo2.fee,
+        feeAsset: feeInfo2.feeAsset,
+        binanceTradeId: orderId,
+        timestamp: orderTime,
+      });
+
+      // 补 filled gridOrder（如果不存在）
+      if (!gridOrder) {
+        await db.gridOrders.add({
+          strategyId,
+          layer: layer as any,
+          gridIndex,
+          side: side as any,
+          price: actualPrice,
+          quantity: executedQty,
+          filledQuantity: executedQty,
+          status: 'filled',
+          binanceOrderId: orderId,
+          createdAt: orderTime,
+          updatedAt: orderTime,
+        });
+      }
+
+      syncedCount++;
+      existingTradeIds.add(orderId);
+      log(strategyId, `补全历史成交: ${side} @ $${actualPrice.toFixed(5)} qty=${executedQty}`);
+    }
+  } catch (err: any) {
+    log(strategyId, `拉取币安历史订单失败: ${err.message}`);
+  }
+
+  // ===== Step 3: 确保每个网格都有一个活跃挂单 =====
+  // 原则：每个 layer+gridIndex 在任意时刻必须有且仅有1个 placed 订单在币安上。
+  // 如果某个网格只有 filled 记录没有 placed → 说明反向单丢失，需要补挂。
+  let reversePlaced = 0;
+
+  // 3a. 先把所有遗留的 pending（未挂出）的订单挂到币安
+  const pendingOrders = await db.gridOrders
+    .where('strategyId').equals(strategyId)
+    .filter(o => o.status === 'pending' && !o.binanceOrderId)
+    .toArray();
+
+  console.log(`[Step3a] 找到 ${pendingOrders.length} 个 pending 订单, symbolInfo=${!!symbolInfo}, tickSize=${tickSize}, stepSize=${stepSize}, pricePrecision=${pricePrecision}, minNotional=${minNotional}`);
+  log(strategyId, `Step3: ${pendingOrders.length}个pending, minNotional=${minNotional}`);
+
+  for (const pending of pendingOrders) {
+    const qty = parseFloat(formatQuantity(pending.quantity, stepSize));
+    const notional = qty * pending.price;
+    if (notional < minNotional) continue;
+
+    const fmtQty = formatQuantity(pending.quantity, stepSize);
+    const fmtPrice = formatPrice(pending.price, pricePrecision);
+    console.log(`[Step3a] 挂出: ${pending.side} ${pending.layer}#${pending.gridIndex} price=${pending.price} -> fmtPrice=${fmtPrice}, qty=${pending.quantity} -> fmtQty=${fmtQty}, notional=${notional}`);
+
+    try {
+      const placeResult = await placeOrder({
+        apiKey: apiConfig.apiKey,
+        apiSecretEncrypted: apiConfig.apiSecret,
+        symbol: strategy.symbol,
+        side: pending.side === 'buy' ? 'BUY' : 'SELL',
+        type: 'LIMIT',
+        quantity: fmtQty,
+        price: fmtPrice,
+        timeInForce: 'GTC',
+      });
+
+      await db.gridOrders.update(pending.id!, {
+        status: 'placed',
+        binanceOrderId: String(placeResult.orderId),
+        updatedAt: Date.now(),
+      });
+      reversePlaced++;
+      console.log(`[Step3a] 成功! orderId=${placeResult.orderId}`);
+      log(strategyId, `挂出待挂单: ${pending.side} ${pending.layer}#${pending.gridIndex} @ $${fmtPrice}`);
+    } catch (err: any) {
+      console.error(`[Step3a] 挂单失败:`, err);
+      log(strategyId, `挂出待挂单失败: ${err.message}，删除该记录`);
+      await db.gridOrders.delete(pending.id!);
+    }
+    await sleep(200);
+  }
+
+  // 3b. 按 layer+gridIndex 分组，检查每个网格是否有活跃的 placed 挂单
+  const allOrders = await db.gridOrders
+    .where('strategyId').equals(strategyId)
+    .toArray();
+
+  // 按 layer+gridIndex 分组
+  const gridGroups = new Map<string, typeof allOrders>();
+  for (const o of allOrders) {
+    const key = `${o.layer}_${o.gridIndex}`;
+    const list = gridGroups.get(key) || [];
+    list.push(o);
+    gridGroups.set(key, list);
+  }
+
+  let noActiveCount = 0;
+  for (const [key, group] of gridGroups) {
+    // 该网格是否已有活跃挂单 (placed 或 pending)
+    const hasActive = group.some(o => o.status === 'placed' || o.status === 'pending');
+    if (hasActive) continue;
+
+    noActiveCount++;
+
+    // 没有活跃挂单 → 找最近一次成交，挂反向单
+    const filledOrders = group
+      .filter(o => o.status === 'filled' && !!o.targetPrice && o.targetPrice > 0)
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    if (filledOrders.length === 0) {
+      console.log(`[Step3b] ${key}: 无活跃挂单，也无可用 filled 订单 (共${group.length}条, 状态: ${group.map(o => o.status).join(',')})`);
+      continue;
+    }
+
+    const lastFilled = filledOrders[0]; // 最近一次成交
+    console.log(`[Step3b] ${key}: 无活跃挂单，最近成交=${lastFilled.side}@${lastFilled.price}, targetPrice=${lastFilled.targetPrice}, qty=${lastFilled.filledQuantity || lastFilled.quantity}`);
+    const reverseSide = lastFilled.side === 'buy' ? 'sell' : 'buy';
+    const reversePrice = lastFilled.targetPrice!;
+    const filledQty = lastFilled.filledQuantity || lastFilled.quantity;
+    const qty = parseFloat(formatQuantity(filledQty, stepSize));
+    const notional = qty * reversePrice;
+
+    if (notional < minNotional) continue;
+
+    const fmtQtyB = formatQuantity(filledQty, stepSize);
+    const fmtPriceB = formatPrice(reversePrice, pricePrecision);
+    console.log(`[Step3b] 挂出: ${reverseSide} [${key}] price=${reversePrice} -> fmtPrice=${fmtPriceB}, qty=${filledQty} -> fmtQty=${fmtQtyB}, notional=${notional}`);
+
+    try {
+      const placeResult = await placeOrder({
+        apiKey: apiConfig.apiKey,
+        apiSecretEncrypted: apiConfig.apiSecret,
+        symbol: strategy.symbol,
+        side: reverseSide === 'buy' ? 'BUY' : 'SELL',
+        type: 'LIMIT',
+        quantity: fmtQtyB,
+        price: fmtPriceB,
+        timeInForce: 'GTC',
+      });
+
+      await db.gridOrders.add({
+        strategyId,
+        layer: lastFilled.layer,
+        gridIndex: lastFilled.gridIndex,
+        side: reverseSide,
+        price: reversePrice,
+        quantity: filledQty,
+        filledQuantity: 0,
+        status: 'placed',
+        targetPrice: lastFilled.price, // 成交后挂回原方向价格
+        profitRate: lastFilled.profitRate,
+        binanceOrderId: String(placeResult.orderId),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      reversePlaced++;
+      console.log(`[Step3b] 成功! orderId=${placeResult.orderId}`);
+      log(strategyId, `补挂反向单: ${reverseSide} [${key}] @ $${fmtPriceB}`);
+    } catch (err: any) {
+      console.error(`[Step3b] 补挂失败 [${key}]:`, err);
+      log(strategyId, `补挂反向单失败 [${key}]: ${err.message}`);
+    }
+    await sleep(200);
+  }
+
+  // ===== Step 4: 补全已有 tradeRecords 中缺失的手续费 =====
+  let feeFixed = 0;
+  const allTrades = await db.tradeRecords.where('strategyId').equals(strategyId).toArray();
+  for (const tr of allTrades) {
+    if (tr.fee === 0 && tr.binanceTradeId) {
+      const feeInfo = await fetchOrderFee(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, tr.binanceTradeId);
+      if (feeInfo.fee > 0) {
+        await db.tradeRecords.update(tr.id!, { fee: feeInfo.fee, feeAsset: feeInfo.feeAsset });
+        feeFixed++;
+      }
+      await sleep(100);
+    }
+  }
+
+  const totalActions = syncedCount + cancelledCount + reversePlaced + feeFixed;
+  if (totalActions > 0) {
+    log(strategyId, `同步完成: ${syncedCount}笔成交补全, ${cancelledCount}笔已取消, ${reversePlaced}个反向单已挂出, ${feeFixed}笔手续费补全`);
+  } else {
+    log(strategyId, `订单状态完全同步`);
+  }
+}
+
+// ==================== 检查订单成交并挂反向单 ====================
+async function checkAndProcessOrders(strategyId: number, apiConfig: ApiConfig, symbolInfo?: SymbolInfo) {
+  // 防并发锁: 如果上一次还没执行完，跳过本次
+  if (_checkLocks.get(strategyId)) return;
+  _checkLocks.set(strategyId, true);
+
+  try {
+    await _doCheckAndProcess(strategyId, apiConfig, symbolInfo);
+  } finally {
+    _checkLocks.set(strategyId, false);
+  }
+}
+
+async function _doCheckAndProcess(strategyId: number, apiConfig: ApiConfig, symbolInfo?: SymbolInfo) {
+  const strategy = await db.strategies.get(strategyId);
+  if (!strategy || strategy.status !== 'running') {
+    stopMonitorLoop(strategyId);
+    return;
+  }
+
+  // 自行获取 symbolInfo（如果未传入）
+  let si = symbolInfo;
+  if (!si) {
+    try {
+      const allSymbols = await getExchangeInfo();
+      si = allSymbols.find(s => s.symbol === strategy.symbol);
+    } catch { /* 使用默认值 */ }
+  }
+
+  const tickSize = si?.tickSize || '0.00001';
+  const stepSize = si?.stepSize || '0.00001';
+  const pricePrecision = tickSize.indexOf('1') - tickSize.indexOf('.');
+  const minNotional = si?.minNotional || 1;
+
+  // ===== 阶段A: 将 pending 订单挂到币安 =====
+  const pendingOrders = await db.gridOrders
+    .where('strategyId').equals(strategyId)
+    .filter(o => o.status === 'pending' && !o.binanceOrderId)
+    .toArray();
+
+  for (const order of pendingOrders) {
+    const qty = parseFloat(formatQuantity(order.quantity, stepSize));
+    const notional = qty * order.price;
+    if (notional < minNotional) continue;
+
+    try {
+      const result = await placeOrder({
+        apiKey: apiConfig.apiKey,
+        apiSecretEncrypted: apiConfig.apiSecret,
+        symbol: strategy.symbol,
+        side: order.side === 'buy' ? 'BUY' : 'SELL',
+        type: 'LIMIT',
+        quantity: formatQuantity(order.quantity, stepSize),
+        price: formatPrice(order.price, pricePrecision),
+        timeInForce: 'GTC',
+      });
+
+      await db.gridOrders.update(order.id!, {
+        status: 'placed',
+        binanceOrderId: String(result.orderId),
+        updatedAt: Date.now(),
+      });
+
+      log(strategyId, `挂出待挂单: ${order.side} ${order.layer}#${order.gridIndex} @ $${order.price.toFixed(pricePrecision)}`);
+    } catch (err: any) {
+      log(strategyId, `待挂单失败: ${order.side} ${order.layer}#${order.gridIndex}: ${err.message}`);
+    }
+
+    await sleep(200);
+  }
+
+  // ===== 阶段B: 检查 placed 订单的成交状态 =====
+  const localOrders = await db.gridOrders
+    .where('strategyId').equals(strategyId)
+    .filter(o => o.status === 'placed' && !!o.binanceOrderId)
+    .toArray();
+
+  if (localOrders.length === 0) return;
+
+  let filledCount = 0;
+
+  for (const order of localOrders) {
+    // 通过 queryOrder 直接查询币安上的订单真实状态
+    let orderStatus: string;
+    let executedQty: number;
+    let actualPrice: number;
+    try {
+      const result = await queryOrder(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, order.binanceOrderId!);
+      orderStatus = result.status; // NEW, PARTIALLY_FILLED, FILLED, CANCELED, EXPIRED, etc.
+      executedQty = parseFloat(result.executedQty || '0');
+      // cummulativeQuoteQty / executedQty = 实际成交均价
+      const cummQuoteQty = parseFloat(result.cummulativeQuoteQty || '0');
+      actualPrice = executedQty > 0 ? (cummQuoteQty / executedQty) : order.price;
+    } catch (err: any) {
+      log(strategyId, `查询订单状态失败 #${order.binanceOrderId}: ${err.message}`);
+      await sleep(100);
+      continue;
+    }
+
+    // 只处理已完全成交的订单
+    if (orderStatus !== 'FILLED') {
+      // 如果被取消或过期，更新本地状态
+      if (orderStatus === 'CANCELED' || orderStatus === 'EXPIRED' || orderStatus === 'REJECTED') {
+        await db.gridOrders.update(order.id!, { status: 'cancelled', updatedAt: Date.now() });
+        log(strategyId, `订单已${orderStatus}: ${order.side} ${order.layer}#${order.gridIndex} @ $${order.price}`);
+      }
+      await sleep(100);
+      continue;
+    }
+
+    // === 订单已成交 ===
+    const filledQty = executedQty > 0 ? executedQty : order.quantity;
+    log(strategyId, `订单成交: ${order.side} ${order.layer}#${order.gridIndex} @ $${actualPrice.toFixed(pricePrecision)} (qty=${filledQty})`);
+
+    // 更新为已成交
+    await db.gridOrders.update(order.id!, {
+      status: 'filled',
+      filledQuantity: filledQty,
+      updatedAt: Date.now(),
+    });
+
+    // 记录交易 (用实际成交价格)
+    const feeInfo3 = await fetchOrderFee(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, order.binanceOrderId!);
+    await db.tradeRecords.add({
+      strategyId,
+      layer: order.layer,
+      gridIndex: order.gridIndex,
+      side: order.side,
+      price: actualPrice,
+      quantity: filledQty,
+      quoteAmount: actualPrice * filledQty,
+      profit: 0,
+      fee: feeInfo3.fee,
+      feeAsset: feeInfo3.feeAsset,
+      binanceTradeId: order.binanceOrderId || '',
+      timestamp: Date.now(),
+    });
+
+    filledCount++;
+
+    // 挂反向单
+    if (order.targetPrice && order.targetPrice > 0) {
+      const reverseSide = order.side === 'buy' ? 'sell' : 'buy';
+      const reversePrice = order.targetPrice;
+      const qty = parseFloat(formatQuantity(filledQty, stepSize));
+      const notional = qty * reversePrice;
+
+      if (notional >= minNotional) {
+        try {
+          const result = await placeOrder({
+            apiKey: apiConfig.apiKey,
+            apiSecretEncrypted: apiConfig.apiSecret,
+            symbol: strategy.symbol,
+            side: reverseSide === 'buy' ? 'BUY' : 'SELL',
+            type: 'LIMIT',
+            quantity: formatQuantity(filledQty, stepSize),
+            price: formatPrice(reversePrice, pricePrecision),
+            timeInForce: 'GTC',
+          });
+
+          // 创建反向订单记录
+          await db.gridOrders.add({
+            strategyId,
+            layer: order.layer,
+            gridIndex: order.gridIndex,
+            side: reverseSide,
+            price: reversePrice,
+            quantity: filledQty,
+            filledQuantity: 0,
+            status: 'placed',
+            targetPrice: actualPrice, // 成交后再挂回原方向 (用实际成交价)
+            profitRate: order.profitRate,
+            binanceOrderId: String(result.orderId),
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+
+          log(strategyId, `反向挂单: ${reverseSide} @ $${reversePrice.toFixed(pricePrecision)}`);
+        } catch (err: any) {
+          log(strategyId, `反向挂单失败: ${err.message}`);
+        }
+
+        await sleep(200);
+      }
+    }
+
+    await sleep(100); // 避免 API 限频
+  }
+
+  // 有成交时才重算利润
+  if (filledCount > 0) {
+    await updateStrategyProfit(strategyId);
+  }
+
+  // ===== 阶段C: 确保每个网格都有活跃挂单 =====
+  // 每个 layer+gridIndex 应该有且仅有1个 placed 挂单。
+  // 如果某网格只有 filled 没有 placed → 补挂反向单。
+  const allGridOrders = await db.gridOrders
+    .where('strategyId').equals(strategyId)
+    .toArray();
+
+  const groups = new Map<string, typeof allGridOrders>();
+  for (const o of allGridOrders) {
+    const k = `${o.layer}_${o.gridIndex}`;
+    const arr = groups.get(k) || [];
+    arr.push(o);
+    groups.set(k, arr);
+  }
+
+  for (const [gk, gOrders] of groups) {
+    // 已有活跃挂单? → 跳过
+    if (gOrders.some(o => o.status === 'placed' || o.status === 'pending')) continue;
+
+    // 找最近一次有 targetPrice 的成交
+    const fills = gOrders
+      .filter(o => o.status === 'filled' && !!o.targetPrice && o.targetPrice > 0)
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    if (fills.length === 0) continue;
+
+    const last = fills[0];
+    const rSide = last.side === 'buy' ? 'sell' : 'buy';
+    const rPrice = last.targetPrice!;
+    const rQty = last.filledQuantity || last.quantity;
+    const fmtQ = formatQuantity(rQty, stepSize);
+    const fmtP = formatPrice(rPrice, pricePrecision);
+    const notional = parseFloat(fmtQ) * rPrice;
+    if (notional < minNotional) continue;
+
+    try {
+      const res = await placeOrder({
+        apiKey: apiConfig.apiKey,
+        apiSecretEncrypted: apiConfig.apiSecret,
+        symbol: strategy.symbol,
+        side: rSide === 'buy' ? 'BUY' : 'SELL',
+        type: 'LIMIT',
+        quantity: fmtQ,
+        price: fmtP,
+        timeInForce: 'GTC',
+      });
+
+      await db.gridOrders.add({
+        strategyId,
+        layer: last.layer,
+        gridIndex: last.gridIndex,
+        side: rSide,
+        price: rPrice,
+        quantity: rQty,
+        filledQuantity: 0,
+        status: 'placed',
+        targetPrice: last.price,
+        profitRate: last.profitRate,
+        binanceOrderId: String(res.orderId),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      log(strategyId, `补挂反向单: ${rSide} [${gk}] @ $${fmtP}`);
+    } catch (err: any) {
+      log(strategyId, `补挂失败 [${gk}]: ${err.message}`);
+    }
+    await sleep(200);
+  }
+}
+
+// ==================== 更新策略利润 ====================
+export async function updateStrategyProfit(strategyId: number) {
+  const strategy = await db.strategies.get(strategyId);
+  if (!strategy) return;
+
+  const trades = await db.tradeRecords.where('strategyId').equals(strategyId).toArray();
+  const filledOrders = await db.gridOrders
+    .where('strategyId').equals(strategyId)
+    .filter(o => o.status === 'filled')
+    .toArray();
+
+  console.log(`[利润重算] 策略${strategyId}: tradeRecords=${trades.length}条, filledOrders=${filledOrders.length}条`);
+  for (const t of trades) {
+    console.log(`  [trade] ${t.side} ${t.layer}#${t.gridIndex} @${t.price} qty=${t.quantity} ts=${new Date(t.timestamp).toLocaleString('zh-CN')}`);
+  }
+  for (const o of filledOrders) {
+    console.log(`  [filled] ${o.side} ${o.layer}#${o.gridIndex} @${o.price} qty=${o.quantity} binanceId=${o.binanceOrderId}`);
+  }
+
+  // 利润计算: 按 layer+gridIndex 分组，时间排序后依次配对 buy→sell
+  let totalProfit = 0;
+  let todayProfit = 0;
+  let pairedCount = 0;
+  let winCount = 0;
+  const todayStart = new Date().setHours(0, 0, 0, 0);
+
+  // 按 layer+gridIndex 分组
+  const groups = new Map<string, typeof trades>();
+  for (const t of trades) {
+    const key = `${t.layer}_${t.gridIndex}`;
+    const list = groups.get(key) || [];
+    list.push(t);
+    groups.set(key, list);
+  }
+
+  for (const [key, group] of groups) {
+    // 按时间排序
+    group.sort((a, b) => a.timestamp - b.timestamp);
+    console.log(`  [配对组] key=${key}, 共${group.length}条: ${group.map(t => t.side).join(',')}`);
+
+    // 依次配对: 遇到 buy 压栈，遇到 sell 弹出最近的 buy 配对
+    const buyStack: typeof trades = [];
+    for (const t of group) {
+      if (t.side === 'buy') {
+        buyStack.push(t);
+      } else if (t.side === 'sell' && buyStack.length > 0) {
+        const matchBuy = buyStack.shift()!; // FIFO: 最早的buy先配对
+        const profit = (t.price - matchBuy.price) * t.quantity;
+        totalProfit += profit;
+        pairedCount++;
+        if (profit > 0) winCount++;
+        if (t.timestamp >= todayStart) todayProfit += profit;
+        console.log(`  [配对] buy@${matchBuy.price} -> sell@${t.price}, profit=${profit.toFixed(6)}`);
+      }
+    }
+  }
+
+  console.log(`[利润重算] 结果: totalProfit=${totalProfit}, pairedCount=${pairedCount}, winCount=${winCount}`);
+
+  const updated: Partial<Strategy> = {
+    totalProfit,
+    todayProfit,
+    totalTrades: pairedCount,
+    winTrades: winCount,
+  };
+
+  await db.strategies.update(strategyId, updated);
+  const full = await db.strategies.get(strategyId);
+  if (full) _onStrategyUpdate?.(full);
+
+  // ===== 净值快照: 每次利润重算后记录，限制每策略每5分钟最多1条 =====
+  try {
+    const SNAPSHOT_INTERVAL = 5 * 60 * 1000; // 5分钟
+    const latestSnap = await db.equitySnapshots
+      .where('strategyId').equals(strategyId)
+      .reverse().sortBy('timestamp')
+      .then(arr => arr[0]);
+    if (!latestSnap || Date.now() - latestSnap.timestamp >= SNAPSHOT_INTERVAL) {
+      // 计算持仓币值和浮动盈亏
+      const allFilled = await db.gridOrders
+        .where('strategyId').equals(strategyId)
+        .filter(o => o.status === 'filled')
+        .toArray();
+      const buys = allFilled.filter(o => o.side === 'buy');
+      const sells = allFilled.filter(o => o.side === 'sell');
+      const matchedKeys = new Set<string>();
+      for (const sell of sells) {
+        const match = buys.find(b =>
+          b.layer === sell.layer && b.gridIndex === sell.gridIndex &&
+          b.createdAt < sell.createdAt && !matchedKeys.has(`${b.layer}-${b.gridIndex}-${b.createdAt}`)
+        );
+        if (match) matchedKeys.add(`${match.layer}-${match.gridIndex}-${match.createdAt}`);
+      }
+      let holdQty = 0, costBasis = 0;
+      for (const b of buys) {
+        if (!matchedKeys.has(`${b.layer}-${b.gridIndex}-${b.createdAt}`)) {
+          holdQty += b.filledQuantity || b.quantity;
+          costBasis += b.price * (b.filledQuantity || b.quantity);
+        }
+      }
+      const strat = await db.strategies.get(strategyId);
+      const coinValue = holdQty; // 持有币数量
+      let unrealizedPnl = 0;
+      let latestPrice = 0;
+      if (holdQty > 0 && strat) {
+        try { latestPrice = await getPrice(strat.symbol); } catch { /* ignore */ }
+        unrealizedPnl = latestPrice > 0 ? (holdQty * latestPrice - costBasis) : 0;
+      }
+      const usdtValue = strat ? strat.totalFund - costBasis + totalProfit : 0;
+
+      await db.equitySnapshots.add({
+        strategyId,
+        totalValue: strat ? strat.totalFund + totalProfit + unrealizedPnl : totalProfit,
+        coinValue,
+        usdtValue,
+        unrealizedPnl,
+        timestamp: Date.now(),
+      });
+    }
+  } catch (e) {
+    console.warn('[净值快照] 记录失败:', e);
+  }
+}
+
+// ==================== 停止策略 ====================
+export async function stopStrategy(strategyId: number, apiConfig: ApiConfig): Promise<void> {
+  log(strategyId, '正在停止策略...');
+
+  // 停止监控循环
+  stopMonitorLoop(strategyId);
+
+  // 取消所有挂单
+  const strategy = await db.strategies.get(strategyId);
+  if (!strategy) return;
+
+  setCurrentExchange(apiConfig.exchange || 'binance');
+
+  const placedOrders = await db.gridOrders
+    .where('strategyId').equals(strategyId)
+    .filter(o => o.status === 'placed' && !!o.binanceOrderId)
+    .toArray();
+
+  let cancelledCount = 0;
+  for (const order of placedOrders) {
+    try {
+      await cancelOrder(apiConfig.apiKey, apiConfig.apiSecret, strategy.symbol, order.binanceOrderId!);
+      await db.gridOrders.update(order.id!, { status: 'cancelled', updatedAt: Date.now() });
+      cancelledCount++;
+    } catch {
+      // 忽略取消失败
+    }
+    await sleep(200);
+  }
+
+  log(strategyId, `已取消 ${cancelledCount} 个挂单`);
+
+  // 更新策略状态
+  await db.strategies.update(strategyId, { status: 'stopped', stoppedAt: Date.now() });
+  const stopped = await db.strategies.get(strategyId);
+  if (stopped) _onStrategyUpdate?.(stopped);
+}
+
+// ==================== 暂停策略 ====================
+export async function pauseStrategy(strategyId: number, _apiConfig: ApiConfig): Promise<void> {
+  log(strategyId, '暂停策略，保留挂单...');
+  stopMonitorLoop(strategyId);
+
+  const strategy = await db.strategies.get(strategyId);
+  if (!strategy) return;
+
+  await db.strategies.update(strategyId, { status: 'paused' });
+  const paused = await db.strategies.get(strategyId);
+  if (paused) _onStrategyUpdate?.(paused);
+}
+
+// ==================== 恢复策略 ====================
+export async function resumeStrategy(strategyId: number, apiConfig: ApiConfig, symbolInfo?: SymbolInfo): Promise<void> {
+  const strategy = await db.strategies.get(strategyId);
+  if (!strategy) return;
+
+  setCurrentExchange(apiConfig.exchange || 'binance');
+
+  // 检查是否有已下的挂单，如果没有则走完整启动流程
+  const placedOrders = await db.gridOrders
+    .where('strategyId').equals(strategyId)
+    .filter(o => o.status === 'placed')
+    .count();
+
+  if (placedOrders === 0) {
+    log(strategyId, '没有已挂订单，执行完整启动流程...');
+    // 重置状态为 idle 再走 startStrategy
+    await db.strategies.update(strategyId, { status: 'idle' });
+    const reset = await db.strategies.get(strategyId);
+    if (reset) await startStrategy(reset, apiConfig, symbolInfo);
+    return;
+  }
+
+  log(strategyId, `恢复策略监控 (${placedOrders} 个挂单)...`);
+  await db.strategies.update(strategyId, { status: 'running' });
+  const resumed = await db.strategies.get(strategyId);
+  if (resumed) _onStrategyUpdate?.(resumed);
+
+  startMonitorLoop(strategyId, apiConfig, symbolInfo);
+}
+
+// ==================== 辅助函数 ====================
+function stopMonitorLoop(strategyId: number) {
+  const state = _executors.get(strategyId);
+  if (state) {
+    if (state.intervalId) clearInterval(state.intervalId);
+    state.running = false;
+    _executors.delete(strategyId);
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// 获取某个策略的执行状态
+export function isStrategyExecutorRunning(strategyId: number): boolean {
+  return _executors.get(strategyId)?.running || false;
+}
+
+// 获取策略的挂单统计
+export async function getStrategyOrderStats(strategyId: number) {
+  const orders = await db.gridOrders.where('strategyId').equals(strategyId).toArray();
+  return {
+    total: orders.length,
+    placed: orders.filter(o => o.status === 'placed').length,
+    filled: orders.filter(o => o.status === 'filled').length,
+    cancelled: orders.filter(o => o.status === 'cancelled').length,
+    error: orders.filter(o => o.status === 'error').length,
+    pending: orders.filter(o => o.status === 'pending').length,
+  };
+}
