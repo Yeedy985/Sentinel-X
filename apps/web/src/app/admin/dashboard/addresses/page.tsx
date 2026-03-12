@@ -46,10 +46,14 @@ export default function AddressesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await adminApi.getPaymentAddresses();
-    if (res.success) {
-      setAddresses((res.data as any).addresses || []);
-      setStats((res.data as any).stats || stats);
+    try {
+      const res = await adminApi.getPaymentAddresses();
+      if (res.success) {
+        setAddresses((res.data as any).addresses || []);
+        setStats((res.data as any).stats || stats);
+      }
+    } catch (e) {
+      console.error('Failed to load payment addresses:', e);
     }
     setLoading(false);
   }, []);

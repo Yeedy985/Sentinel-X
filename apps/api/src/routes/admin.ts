@@ -874,22 +874,27 @@ async function unlockExpiredAddresses() {
 
 // ── 获取收款地址列表 ──
 adminRoutes.get('/payment-addresses', async (c) => {
-  await unlockExpiredAddresses();
-  const network = c.req.query('network') as 'TRC20' | 'ERC20' | undefined;
-  const where = network ? { network } : {};
-  const addresses = await db.paymentAddress.findMany({
-    where,
-    orderBy: [{ network: 'asc' }, { id: 'asc' }],
-  });
-  const stats = {
-    trc20Total: await db.paymentAddress.count({ where: { network: 'TRC20' } }),
-    trc20Idle: await db.paymentAddress.count({ where: { network: 'TRC20', status: 'IDLE' } }),
-    trc20Locked: await db.paymentAddress.count({ where: { network: 'TRC20', status: 'LOCKED' } }),
-    erc20Total: await db.paymentAddress.count({ where: { network: 'ERC20' } }),
-    erc20Idle: await db.paymentAddress.count({ where: { network: 'ERC20', status: 'IDLE' } }),
-    erc20Locked: await db.paymentAddress.count({ where: { network: 'ERC20', status: 'LOCKED' } }),
-  };
-  return c.json<ApiResponse>({ success: true, data: { addresses, stats } });
+  try {
+    await unlockExpiredAddresses();
+    const network = c.req.query('network') as 'TRC20' | 'ERC20' | undefined;
+    const where = network ? { network } : {};
+    const addresses = await db.paymentAddress.findMany({
+      where,
+      orderBy: [{ network: 'asc' }, { id: 'asc' }],
+    });
+    const stats = {
+      trc20Total: await db.paymentAddress.count({ where: { network: 'TRC20' } }),
+      trc20Idle: await db.paymentAddress.count({ where: { network: 'TRC20', status: 'IDLE' } }),
+      trc20Locked: await db.paymentAddress.count({ where: { network: 'TRC20', status: 'LOCKED' } }),
+      erc20Total: await db.paymentAddress.count({ where: { network: 'ERC20' } }),
+      erc20Idle: await db.paymentAddress.count({ where: { network: 'ERC20', status: 'IDLE' } }),
+      erc20Locked: await db.paymentAddress.count({ where: { network: 'ERC20', status: 'LOCKED' } }),
+    };
+    return c.json<ApiResponse>({ success: true, data: { addresses, stats } });
+  } catch (e: any) {
+    console.error('payment-addresses error:', e.message);
+    return c.json<ApiResponse>({ success: true, data: { addresses: [], stats: { trc20Total: 0, trc20Idle: 0, trc20Locked: 0, erc20Total: 0, erc20Idle: 0, erc20Locked: 0 } } });
+  }
 });
 
 // ── 批量导入地址 ──
