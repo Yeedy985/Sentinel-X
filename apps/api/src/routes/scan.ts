@@ -114,6 +114,24 @@ scanRoutes.post('/request', async (c) => {
   if (cached) {
     // 命中缓存: 直接返回缓存结果，不消耗真实 LLM 成本
     const briefingData = cached.briefingData as any;
+
+    // 查原始（非缓存）扫描记录的真实耗时，用于伪装时间
+    const originalRecord = await db.scanRecord.findFirst({
+      where: { cacheId: cached.id, isCached: false },
+      select: { startedAt: true, completedAt: true },
+    }) || await db.scanRecord.findFirst({
+      where: { isCached: false, enableSearch, status: 'COMPLETED', completedAt: { not: null } },
+      orderBy: { completedAt: 'desc' },
+      select: { startedAt: true, completedAt: true },
+    });
+    // 计算原始扫描耗时 (毫秒)，默认 30-45 秒
+    const originalDurationMs = originalRecord?.completedAt
+      ? originalRecord.completedAt.getTime() - originalRecord.startedAt.getTime()
+      : (30 + Math.random() * 15) * 1000;
+
+    const fakeStartedAt = new Date();
+    const fakeCompletedAt = new Date(fakeStartedAt.getTime() + originalDurationMs);
+
     await db.scanRecord.create({
       data: {
         userId,
@@ -129,8 +147,8 @@ scanRoutes.post('/request', async (c) => {
         revenueUsd: tokenCost * 0.5,
         profitUsd: tokenCost * 0.5,
         briefingData: cached.briefingData as any ?? undefined,
-        startedAt: new Date(),
-        completedAt: new Date(),
+        startedAt: fakeStartedAt,
+        completedAt: fakeCompletedAt,
       },
     });
 
@@ -138,7 +156,7 @@ scanRoutes.post('/request', async (c) => {
       success: true,
       data: {
         briefingId,
-        estimatedSeconds: 0,
+        estimatedSeconds: Math.ceil(originalDurationMs / 1000),
         tokenCost,
         cached: true,
       },
@@ -193,9 +211,21 @@ scanRoutes.get('/briefings', async (c) => {
   });
 
   // 查询关联的 SystemScanLog 获取真实 LLM token 统计
-  const briefingIds = records.map(r => r.briefingId);
-  const sysLogs = briefingIds.length > 0
-    ? await db.systemScanLog.findMany({ where: { briefingId: { in: briefingIds } } })
+  // 对缓存记录，需要追溯到产生该缓存的原始扫描的 token 数据
+  const directBriefingIds = records.filter(r => !r.isCached).map(r => r.briefingId);
+  const cachedRecords = records.filter(r => r.isCached && r.cacheId);
+  const cacheIds = cachedRecords.map(r => r.cacheId!);
+  // 查找原始（非缓存）扫描记录以获取其 briefingId → SystemScanLog
+  const originalRecords = cacheIds.length > 0
+    ? await db.scanRecord.findMany({
+        where: { cacheId: { in: cacheIds }, isCached: false },
+        select: { cacheId: true, briefingId: true },
+      })
+    : [];
+  const cacheToOriginalBriefing = new Map(originalRecords.map(r => [r.cacheId!, r.briefingId]));
+  const allLookupIds = [...directBriefingIds, ...originalRecords.map(r => r.briefingId)];
+  const sysLogs = allLookupIds.length > 0
+    ? await db.systemScanLog.findMany({ where: { briefingId: { in: allLookupIds } } })
     : [];
   const sysLogMap = new Map(sysLogs.map(l => [l.briefingId, l]));
 
@@ -203,14 +233,17 @@ scanRoutes.get('/briefings', async (c) => {
     .filter((r) => r.briefingData)
     .map((r) => {
       const d = r.briefingData as any;
-      const sl = sysLogMap.get(r.briefingId);
+      // 对缓存记录，用原始扫描的 briefingId 查 SystemScanLog
+      const lookupId = r.isCached && r.cacheId
+        ? cacheToOriginalBriefing.get(r.cacheId) || r.briefingId
+        : r.briefingId;
+      const sl = sysLogMap.get(lookupId);
       return {
         briefingId: r.briefingId,
         timestamp: r.completedAt?.getTime() ?? r.startedAt.getTime(),
         startedAt: r.startedAt.toISOString(),
         completedAt: r.completedAt?.toISOString() || null,
         enableSearch: r.enableSearch,
-        isCached: r.isCached,
         tokenCost: r.tokenCost,
         marketSummary: d.marketSummary || '',
         triggeredSignals: d.triggeredSignals || [],
