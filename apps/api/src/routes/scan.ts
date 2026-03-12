@@ -111,7 +111,7 @@ scanRoutes.post('/request', async (c) => {
         realCostUsd: 0,
         revenueUsd: tokenCost * 0.5,
         profitUsd: tokenCost * 0.5,
-        briefingData: cached.briefingData,
+        briefingData: cached.briefingData as any ?? undefined,
         startedAt: new Date(),
         completedAt: new Date(),
       },

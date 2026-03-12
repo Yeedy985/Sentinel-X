@@ -416,7 +416,7 @@ adminRoutes.post('/pipelines', async (c) => {
       apiKeyEnc: encryptValue(body.apiKey),
       enabled: body.enabled ?? true,
       priority: body.priority ?? 0,
-      extraParams: body.extraParams ?? null,
+      extraParams: body.extraParams as any ?? undefined,
     },
   });
 
