@@ -192,13 +192,26 @@ scanRoutes.get('/briefings', async (c) => {
     take: limit,
   });
 
+  // 查询关联的 SystemScanLog 获取真实 LLM token 统计
+  const briefingIds = records.map(r => r.briefingId);
+  const sysLogs = briefingIds.length > 0
+    ? await db.systemScanLog.findMany({ where: { briefingId: { in: briefingIds } } })
+    : [];
+  const sysLogMap = new Map(sysLogs.map(l => [l.briefingId, l]));
+
   const briefings: BriefingResponse[] = records
     .filter((r) => r.briefingData)
     .map((r) => {
       const d = r.briefingData as any;
+      const sl = sysLogMap.get(r.briefingId);
       return {
         briefingId: r.briefingId,
         timestamp: r.completedAt?.getTime() ?? r.startedAt.getTime(),
+        startedAt: r.startedAt.toISOString(),
+        completedAt: r.completedAt?.toISOString() || null,
+        enableSearch: r.enableSearch,
+        isCached: r.isCached,
+        tokenCost: r.tokenCost,
         marketSummary: d.marketSummary || '',
         triggeredSignals: d.triggeredSignals || [],
         alerts: d.alerts || [],
@@ -206,6 +219,11 @@ scanRoutes.get('/briefings', async (c) => {
           hasSearcher: r.enableSearch,
           hasMarketData: false,
           analyzerProvider: 'unknown',
+        },
+        serverTokenUsage: {
+          searchTokens: sl?.tokenCostSearch ?? 0,
+          analyzeTokens: sl?.tokenCostAnalyze ?? 0,
+          totalTokens: sl?.tokenCostTotal ?? 0,
         },
       };
     });
