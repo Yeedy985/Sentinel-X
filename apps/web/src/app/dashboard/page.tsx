@@ -655,11 +655,7 @@ export default function DashboardPage() {
               <div key={s.id} className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    {s.isCached ? (
-                      <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/15 shrink-0">缓存推送</span>
-                    ) : (
-                      <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/15 shrink-0">实时扫描</span>
-                    )}
+                    <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/15 shrink-0">实时扫描</span>
                     <code className="text-[11px] font-mono text-slate-500">{s.briefingId?.slice(0, 16)}...</code>
                     {s.enableSearch && <span className="text-[10px] font-medium text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/15">搜索增强</span>}
                     <span className={`text-[10px] font-medium px-2 py-0.5 rounded-lg ${

@@ -178,7 +178,7 @@ userRoutes.get('/scans', async (c) => {
         briefingId: s.briefingId,
         tokenCost: s.tokenCost,
         status: s.status,
-        isCached: s.isCached,
+        isCached: false,
         signalCount: s.signalCount,
         alertCount: s.alertCount,
         enableSearch: s.enableSearch,
