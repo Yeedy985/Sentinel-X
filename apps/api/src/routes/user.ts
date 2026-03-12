@@ -261,27 +261,31 @@ userRoutes.post('/recharge', async (c) => {
       FOR UPDATE SKIP LOCKED
     `;
 
-    let walletAddress = USDT_WALLET_ADDRESS;
-    let addressLocked = false;
-
-    if (rows.length > 0) {
-      const addrId = rows[0].id;
-      walletAddress = rows[0].address;
-
-      await tx.paymentAddress.update({
-        where: { id: addrId },
-        data: {
-          status: 'LOCKED',
-          lockExpiresAt,
-          lockedByUser: userId,
-          lockedOrderId: record.id,
-        },
-      });
-      addressLocked = true;
+    if (rows.length === 0) {
+      // 没有可用地址，回滚事务（删除刚创建的订单）
+      await tx.rechargeRecord.delete({ where: { id: record.id } });
+      return { noAddress: true } as any;
     }
 
-    return { record, walletAddress, addressLocked };
+    const addrId = rows[0].id;
+    const walletAddress = rows[0].address;
+
+    await tx.paymentAddress.update({
+      where: { id: addrId },
+      data: {
+        status: 'LOCKED',
+        lockExpiresAt,
+        lockedByUser: userId,
+        lockedOrderId: record.id,
+      },
+    });
+
+    return { record, walletAddress, noAddress: false };
   });
+
+  if (result.noAddress) {
+    return c.json<ApiResponse>({ success: false, error: '当前充值用户较多，收款地址暂时不足，请稍后再试' }, 503);
+  }
 
   const orderExpiresAt = new Date(Date.now() + RECHARGE_EXPIRY_MINUTES * 60 * 1000);
 
