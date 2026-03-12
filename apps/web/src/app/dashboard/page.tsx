@@ -40,7 +40,7 @@ export default function DashboardPage() {
   const [exchangeLoading, setExchangeLoading] = useState<number | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const USDT_RATE = 10; // 1 USDT = 10 Token
+  const [usdtRate, setUsdtRate] = useState(10);
   const QUICK_AMOUNTS = [5, 10, 20, 50, 100];
 
   useEffect(() => {
@@ -50,9 +50,10 @@ export default function DashboardPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const [pRes, tRes] = await Promise.all([api.getProfile(), api.getTokens()]);
+    const [pRes, tRes, cRes] = await Promise.all([api.getProfile(), api.getTokens(), api.getConfig()]);
     if (pRes.success) setProfile(pRes.data);
     if (tRes.success) setTokens((tRes.data as any[]) || []);
+    if (cRes.success) setUsdtRate((cRes.data as any)?.usdtToTokenRate || 10);
     setLoading(false);
   };
 
@@ -245,8 +246,8 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2 text-xs font-medium text-cyan-400/60 mb-3 tracking-wide uppercase">
               <TrendingUp className="w-3.5 h-3.5" />兑换费率
             </div>
-            <div className="text-4xl font-extrabold text-cyan-400 tracking-tight">1<span className="text-lg text-cyan-500/60 mx-0.5">:</span>{USDT_RATE}</div>
-            <div className="text-[11px] text-slate-500 mt-2">1 USDT = {USDT_RATE} Token</div>
+            <div className="text-4xl font-extrabold text-cyan-400 tracking-tight">1<span className="text-lg text-cyan-500/60 mx-0.5">:</span>{usdtRate}</div>
+            <div className="text-[11px] text-slate-500 mt-2">1 USDT = {usdtRate} Token</div>
           </div>
           <div className="group relative p-5 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all duration-300">
             <div className="flex items-center gap-2 text-xs font-medium text-slate-400/60 mb-3 tracking-wide uppercase">
@@ -306,7 +307,7 @@ export default function DashboardPage() {
                   </h3>
                   <p className="text-xs text-slate-500 mt-2 ml-[42px] leading-relaxed">
                     通过 USDT (TRC20) 充值后兑换为 Token<br />
-                    费率: <span className="text-cyan-400 font-semibold">1 USDT = {USDT_RATE} Token</span>
+                    费率: <span className="text-cyan-400 font-semibold">1 USDT = {usdtRate} Token</span>
                   </p>
                 </div>
 
@@ -357,7 +358,7 @@ export default function DashboardPage() {
                     <div className="h-px bg-white/[0.04] my-2.5" />
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-slate-400">可获得</span>
-                      <span className="font-bold text-amber-400 text-base">{Math.floor(Number(rechargeAmount) * USDT_RATE)} Token</span>
+                      <span className="font-bold text-amber-400 text-base">{Math.floor(Number(rechargeAmount) * usdtRate)} Token</span>
                     </div>
                   </div>
                 )}
@@ -408,7 +409,7 @@ export default function DashboardPage() {
                   {/* Amount */}
                   <div className="text-center py-5 rounded-xl bg-white/[0.02]">
                     <div className="text-5xl font-extrabold text-white tracking-tight">{rechargeOrder.usdtAmount} <span className="text-xl text-slate-500 font-medium">USDT</span></div>
-                    <div className="text-xs text-slate-500 mt-2 font-medium">≈ {rechargeOrder.usdtAmount * USDT_RATE} Token</div>
+                    <div className="text-xs text-slate-500 mt-2 font-medium">≈ {rechargeOrder.usdtAmount * usdtRate} Token</div>
                   </div>
 
                   {/* Wallet Address */}
@@ -456,7 +457,7 @@ export default function DashboardPage() {
                       className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-40 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/15"
                     >
                       {exchangeLoading === rechargeOrder.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRightLeft className="w-4 h-4" />}
-                      兑换 {rechargeOrder.usdtAmount * USDT_RATE} Token
+                      兑换 {rechargeOrder.usdtAmount * usdtRate} Token
                     </button>
                   )}
                 </div>

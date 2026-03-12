@@ -68,6 +68,9 @@ function getMockResponse(path: string, options: RequestInit = {}): any {
     }
     return mockErr('邮箱或密码错误 (Dev模式: demo@sentinel.aags.app / demo123)');
   }
+  if (path === '/api/user/config') {
+    return mockOk({ usdtToTokenRate: 10 });
+  }
   if (path === '/api/user/profile') {
     return mockOk({ id: 1, email: MOCK_USER.email, nickname: 'Demo User', tokenBalance: mockBalance, status: 'ACTIVE', createdAt: '2026-03-01T10:00:00Z' });
   }
@@ -175,6 +178,9 @@ export const api = {
     request('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body: { email: string; password: string }) =>
     request('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Config (public, no auth required)
+  getConfig: () => request('/api/user/config'),
 
   // User
   getProfile: () => request('/api/user/profile'),

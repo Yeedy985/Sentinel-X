@@ -25,7 +25,24 @@ import type {
   RechargeRecordInfo, RechargeOrderResponse, ExchangeResponse,
 } from '@sentinel/shared';
 
+// ── 动态读取管理配置 ──
+async function getSetting<T>(key: string, fallback: T): Promise<T> {
+  const s = await db.adminSetting.findUnique({ where: { key } });
+  return s ? (s.value as T) : fallback;
+}
+
 export const userRoutes = new Hono();
+
+// ── 公开配置 (无需登录) ──
+userRoutes.get('/config', async (c) => {
+  const rateRaw = await getSetting('token_to_cny_rate', 10);
+  const rate = Number(rateRaw);
+  return c.json<ApiResponse>({
+    success: true,
+    data: { usdtToTokenRate: rate },
+  });
+});
+
 userRoutes.use('*', requireAuth);
 
 // ── 用户信息 ──
@@ -313,7 +330,8 @@ userRoutes.post('/exchange', async (c) => {
   }
 
   const usdtAmount = Number(record.amount) / 100; // 分→元
-  const tokensToGrant = Math.floor(usdtAmount * USDT_TO_TOKEN_RATE);
+  const dynamicRate = Number(await getSetting('token_to_cny_rate', USDT_TO_TOKEN_RATE));
+  const tokensToGrant = Math.floor(usdtAmount * dynamicRate);
 
   if (tokensToGrant <= 0) {
     return c.json<ApiResponse>({ success: false, error: '充值金额过小，无法兑换' }, 400);
@@ -338,7 +356,7 @@ userRoutes.post('/exchange', async (c) => {
         amount: BigInt(tokensToGrant),
         balanceAfter: user.tokenBalance,
         refId: `recharge_${rechargeId}`,
-        description: `USDT充值兑换 ${usdtAmount} USDT → ${tokensToGrant} Token (费率: 1 USDT = ${USDT_TO_TOKEN_RATE} Token)`,
+        description: `USDT充值兑换 ${usdtAmount} USDT → ${tokensToGrant} Token (费率: 1 USDT = ${dynamicRate} Token)`,
       },
     });
 
@@ -350,7 +368,7 @@ userRoutes.post('/exchange', async (c) => {
     data: {
       tokensGranted: result.tokensGranted,
       newBalance: result.newBalance,
-      rate: USDT_TO_TOKEN_RATE,
+      rate: dynamicRate,
     },
     message: `成功兑换 ${result.tokensGranted} Token`,
   });

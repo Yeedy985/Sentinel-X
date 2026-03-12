@@ -37,6 +37,8 @@ export default function AdminDashboardPage() {
     if (res.success) setStats(res.data);
     setLoading(false);
     loadSystemScans(1);
+    // 同时加载调用记录总数，避免 tab badge 显示 0
+    loadCallLogs(1);
   };
 
   const loadSystemScans = async (page: number) => {
