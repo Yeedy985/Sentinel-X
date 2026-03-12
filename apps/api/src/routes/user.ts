@@ -284,7 +284,7 @@ userRoutes.post('/recharge', async (c) => {
   });
 
   if (result.noAddress) {
-    return c.json<ApiResponse>({ success: false, error: `当前 ${network} 通道充值繁忙，收款地址暂时不足，请稍后再试或切换其他网络` }, 503);
+    return c.json<ApiResponse>({ success: false, error: `当前 ${network} 通道充值繁忙，请稍后再试或切换其他网络` }, 503);
   }
 
   const orderExpiresAt = new Date(Date.now() + RECHARGE_EXPIRY_MINUTES * 60 * 1000);
