@@ -213,38 +213,79 @@ userRoutes.get('/scans', async (c) => {
   });
 });
 
+// ── 自动解锁过期收款地址 ──
+async function unlockExpiredPaymentAddresses() {
+  await db.paymentAddress.updateMany({
+    where: { status: 'LOCKED', lockExpiresAt: { lt: new Date() } },
+    data: { status: 'IDLE', lockedByUser: null, lockedOrderId: null, lockExpiresAt: null },
+  });
+}
+
 // ── 创建 USDT 充值订单 ──
 userRoutes.post('/recharge', async (c) => {
   const userId = c.get('userId');
-  const body = await c.req.json<{ amount: number }>().catch(() => ({ amount: 0 }));
+  const body = await c.req.json<{ amount: number; network?: string }>().catch(() => ({ amount: 0, network: undefined }));
   const amount = Number(body.amount);
+  const network = (body.network === 'ERC20' ? 'ERC20' : 'TRC20') as 'TRC20' | 'ERC20';
 
   if (!amount || amount < MIN_USDT_RECHARGE) {
     return c.json<ApiResponse>({ success: false, error: `最低充值 ${MIN_USDT_RECHARGE} USDT` }, 400);
   }
 
-  const expiresAt = new Date(Date.now() + RECHARGE_EXPIRY_MINUTES * 60 * 1000);
+  // 先解锁过期地址
+  await unlockExpiredPaymentAddresses();
 
+  // 从数据库分配一个空闲地址，锁定10分钟
+  const LOCK_MINUTES = 10;
+  const lockExpiresAt = new Date(Date.now() + LOCK_MINUTES * 60 * 1000);
+
+  // 创建充值记录
   const record = await db.rechargeRecord.create({
     data: {
       userId,
-      amount: BigInt(Math.round(amount * 100)), // 存分, 如 10 USDT = 1000
+      amount: BigInt(Math.round(amount * 100)),
       method: 'USDT',
       status: 'PENDING',
-      note: `${amount} USDT via ${USDT_NETWORK}`,
+      note: `${amount} USDT via ${network}`,
     },
   });
+
+  // 尝试分配地址：找到一个空闲地址并锁定
+  let walletAddress = USDT_WALLET_ADDRESS;
+  let assignedNetwork = network;
+
+  const idleAddr = await db.paymentAddress.findFirst({
+    where: { network, status: 'IDLE' },
+    orderBy: { id: 'asc' },
+  });
+
+  if (idleAddr) {
+    await db.paymentAddress.update({
+      where: { id: idleAddr.id },
+      data: {
+        status: 'LOCKED',
+        lockExpiresAt,
+        lockedByUser: userId,
+        lockedOrderId: record.id,
+      },
+    });
+    walletAddress = idleAddr.address;
+  }
+  // 如果没有空闲地址，使用默认硬编码地址
+
+  const orderExpiresAt = new Date(Date.now() + RECHARGE_EXPIRY_MINUTES * 60 * 1000);
 
   return c.json<ApiResponse<RechargeOrderResponse>>({
     success: true,
     data: {
       id: record.id,
       usdtAmount: amount,
-      walletAddress: USDT_WALLET_ADDRESS,
-      network: USDT_NETWORK,
+      walletAddress,
+      network: assignedNetwork,
       status: 'PENDING',
-      expiresAt: expiresAt.toISOString(),
-    },
+      expiresAt: orderExpiresAt.toISOString(),
+      lockExpiresAt: idleAddr ? lockExpiresAt.toISOString() : undefined,
+    } as any,
   }, 201);
 });
 

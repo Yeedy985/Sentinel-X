@@ -195,8 +195,8 @@ export const api = {
     request(`/api/user/scans?page=${page}&pageSize=${pageSize}`),
 
   // Recharge
-  createRecharge: (amount: number) =>
-    request('/api/user/recharge', { method: 'POST', body: JSON.stringify({ amount }) }),
+  createRecharge: (amount: number, network: string = 'TRC20') =>
+    request('/api/user/recharge', { method: 'POST', body: JSON.stringify({ amount, network }) }),
   getRecharges: (page = 1, pageSize = 20) =>
     request(`/api/user/recharges?page=${page}&pageSize=${pageSize}`),
   confirmRecharge: (id: number, txRef?: string) =>

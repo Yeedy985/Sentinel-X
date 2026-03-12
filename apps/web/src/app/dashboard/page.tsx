@@ -41,6 +41,8 @@ export default function DashboardPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [usdtRate, setUsdtRate] = useState(10);
+  const [selectedNetwork, setSelectedNetwork] = useState<'TRC20' | 'ERC20'>('TRC20');
+  const [lockCountdown, setLockCountdown] = useState('');
   const QUICK_AMOUNTS = [5, 10, 20, 50, 100];
 
   useEffect(() => {
@@ -103,15 +105,30 @@ export default function DashboardPage() {
     setTimeout(() => setMessage(null), 4000);
   };
 
+  // ── Lock countdown timer ──
+  useEffect(() => {
+    if (!rechargeOrder?.lockExpiresAt) { setLockCountdown(''); return; }
+    const tick = () => {
+      const diff = new Date(rechargeOrder.lockExpiresAt).getTime() - Date.now();
+      if (diff <= 0) { setLockCountdown('已过期'); return; }
+      const min = Math.floor(diff / 60000);
+      const sec = Math.floor((diff % 60000) / 1000);
+      setLockCountdown(`${min}:${sec.toString().padStart(2, '0')}`);
+    };
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [rechargeOrder?.lockExpiresAt]);
+
   // ── Recharge Flow ──
   const handleCreateRecharge = async () => {
     const amount = Number(rechargeAmount);
     if (!amount || amount < 1) { showMsg('error', '最低充值 1 USDT'); return; }
     setRechargeLoading(true);
-    const res = await api.createRecharge(amount);
+    const res = await api.createRecharge(amount, selectedNetwork);
     if (res.success) {
       setRechargeOrder(res.data);
-      showMsg('success', `充值订单已创建: ${amount} USDT`);
+      showMsg('success', `充值订单已创建: ${amount} USDT (${selectedNetwork})`);
       setRechargeAmount('');
     } else {
       showMsg('error', (res as any).error || '创建失败');
@@ -306,9 +323,29 @@ export default function DashboardPage() {
                     USDT 充值
                   </h3>
                   <p className="text-xs text-slate-500 mt-2 ml-[42px] leading-relaxed">
-                    通过 USDT (TRC20) 充值后兑换为 Token<br />
+                    通过 USDT 充值后兑换为 Token<br />
                     费率: <span className="text-cyan-400 font-semibold">1 USDT = {usdtRate} Token</span>
                   </p>
+                </div>
+
+                {/* Network Selection */}
+                <div>
+                  <label className="text-[11px] font-medium text-slate-500 mb-2.5 block uppercase tracking-wider">选择网络</label>
+                  <div className="flex gap-2">
+                    {(['TRC20', 'ERC20'] as const).map(n => (
+                      <button
+                        key={n}
+                        onClick={() => setSelectedNetwork(n)}
+                        className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                          selectedNetwork === n
+                            ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/25'
+                            : 'bg-white/[0.04] text-slate-300 border border-white/[0.06] hover:bg-white/[0.08]'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Quick Amounts */}
@@ -432,9 +469,23 @@ export default function DashboardPage() {
                     <strong className="text-amber-300">注意:</strong> 请确保使用 <span className="font-bold text-amber-300">{rechargeOrder.network}</span> 网络转账，其他网络转账将无法到账
                   </div>
 
+                  {/* Lock Countdown */}
+                  {rechargeOrder.lockExpiresAt && lockCountdown && (
+                    <div className="p-3.5 rounded-xl bg-indigo-500/[0.06] border border-indigo-500/15 flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs text-indigo-300">
+                        <Clock className="w-4 h-4" />
+                        <span>地址锁定倒计时</span>
+                      </div>
+                      <span className={`text-lg font-bold font-mono ${lockCountdown === '已过期' ? 'text-red-400' : 'text-indigo-300'}`}>
+                        {lockCountdown}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Order Info */}
                   <div className="space-y-2 text-xs px-1">
                     <div className="flex justify-between"><span className="text-slate-500">订单号</span><span className="font-mono text-slate-300 font-medium">#{rechargeOrder.id}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-500">网络</span><span className="text-slate-300 font-medium">{rechargeOrder.network}</span></div>
                     <div className="flex justify-between"><span className="text-slate-500">有效期至</span><span className="text-slate-300">{new Date(rechargeOrder.expiresAt).toLocaleString('zh-CN')}</span></div>
                   </div>
 

@@ -304,4 +304,16 @@ export const adminApi = {
     request(`/api/admin/admins/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteAdmin: (id: number) =>
     request(`/api/admin/admins/${id}`, { method: 'DELETE' }),
+  getPaymentAddresses: (network?: string) =>
+    request(`/api/admin/payment-addresses${network ? `?network=${network}` : ''}`),
+  importPaymentAddresses: (network: string, addresses: string[]) =>
+    request('/api/admin/payment-addresses/import', { method: 'POST', body: JSON.stringify({ network, addresses }) }),
+  updatePaymentAddress: (id: number, data: { address?: string; network?: string }) =>
+    request(`/api/admin/payment-addresses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletePaymentAddress: (id: number) =>
+    request(`/api/admin/payment-addresses/${id}`, { method: 'DELETE' }),
+  deletePaymentAddressBatch: (ids: number[]) =>
+    request('/api/admin/payment-addresses/delete-batch', { method: 'POST', body: JSON.stringify({ ids }) }),
+  unlockPaymentAddress: (id: number) =>
+    request(`/api/admin/payment-addresses/${id}/unlock`, { method: 'POST' }),
 };

@@ -217,6 +217,32 @@ model PromptTemplate {
   @@map("prompt_templates")
 }
 
+// ==================== 收款地址 (TRC20 / ERC20) ====================
+model PaymentAddress {
+  id            Int              @id @default(autoincrement())
+  address       String           @db.VarChar(255)
+  network       PaymentNetwork   @default(TRC20)
+  status        AddressStatus    @default(IDLE)
+  lockExpiresAt DateTime?        @map("lock_expires_at") @db.Timestamptz
+  lockedByUser  Int?             @map("locked_by_user")
+  lockedOrderId Int?             @map("locked_order_id")
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([address, network])
+  @@index([network, status])
+  @@map("payment_addresses")
+}
+
+enum PaymentNetwork {
+  TRC20
+  ERC20
+}
+
+enum AddressStatus {
+  IDLE
+  LOCKED
+}
+
 // ==================== 300信号矩阵 (逐条管理) ====================
 model SignalDefinition {
   id               Int       @id @default(autoincrement())

@@ -860,3 +860,98 @@ adminRoutes.get('/trigger-scan/:briefingId', async (c) => {
   });
 });
 
+// ══════════════════════════════════════════════════════════════
+// ── 收款地址管理 ──
+// ══════════════════════════════════════════════════════════════
+
+// 自动解锁过期地址的辅助函数
+async function unlockExpiredAddresses() {
+  await db.paymentAddress.updateMany({
+    where: { status: 'LOCKED', lockExpiresAt: { lt: new Date() } },
+    data: { status: 'IDLE', lockedByUser: null, lockedOrderId: null, lockExpiresAt: null },
+  });
+}
+
+// ── 获取收款地址列表 ──
+adminRoutes.get('/payment-addresses', async (c) => {
+  await unlockExpiredAddresses();
+  const network = c.req.query('network') as 'TRC20' | 'ERC20' | undefined;
+  const where = network ? { network } : {};
+  const addresses = await db.paymentAddress.findMany({
+    where,
+    orderBy: [{ network: 'asc' }, { id: 'asc' }],
+  });
+  const stats = {
+    trc20Total: await db.paymentAddress.count({ where: { network: 'TRC20' } }),
+    trc20Idle: await db.paymentAddress.count({ where: { network: 'TRC20', status: 'IDLE' } }),
+    trc20Locked: await db.paymentAddress.count({ where: { network: 'TRC20', status: 'LOCKED' } }),
+    erc20Total: await db.paymentAddress.count({ where: { network: 'ERC20' } }),
+    erc20Idle: await db.paymentAddress.count({ where: { network: 'ERC20', status: 'IDLE' } }),
+    erc20Locked: await db.paymentAddress.count({ where: { network: 'ERC20', status: 'LOCKED' } }),
+  };
+  return c.json<ApiResponse>({ success: true, data: { addresses, stats } });
+});
+
+// ── 批量导入地址 ──
+adminRoutes.post('/payment-addresses/import', async (c) => {
+  const body = await c.req.json<{ network: 'TRC20' | 'ERC20'; addresses: string[] }>();
+  const { network, addresses } = body;
+  if (!network || !addresses?.length) {
+    return c.json<ApiResponse>({ success: false, error: '缺少 network 或 addresses' }, 400);
+  }
+  const cleaned = [...new Set(addresses.map(a => a.trim()).filter(a => a.length > 10))];
+  if (cleaned.length === 0) {
+    return c.json<ApiResponse>({ success: false, error: '没有有效地址' }, 400);
+  }
+  let imported = 0;
+  let skipped = 0;
+  for (const addr of cleaned) {
+    try {
+      await db.paymentAddress.create({ data: { address: addr, network } });
+      imported++;
+    } catch {
+      skipped++; // unique constraint violation → already exists
+    }
+  }
+  return c.json<ApiResponse>({ success: true, data: { imported, skipped, total: cleaned.length } });
+});
+
+// ── 更新单个地址 ──
+adminRoutes.put('/payment-addresses/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  const body = await c.req.json<{ address?: string; network?: 'TRC20' | 'ERC20' }>();
+  const data: any = {};
+  if (body.address) data.address = body.address.trim();
+  if (body.network) data.network = body.network;
+  try {
+    const updated = await db.paymentAddress.update({ where: { id }, data });
+    return c.json<ApiResponse>({ success: true, data: updated });
+  } catch (e: any) {
+    return c.json<ApiResponse>({ success: false, error: e.message?.includes('Unique') ? '地址已存在' : '更新失败' }, 400);
+  }
+});
+
+// ── 删除地址 ──
+adminRoutes.delete('/payment-addresses/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  await db.paymentAddress.delete({ where: { id } }).catch(() => {});
+  return c.json<ApiResponse>({ success: true });
+});
+
+// ── 批量删除 ──
+adminRoutes.post('/payment-addresses/delete-batch', async (c) => {
+  const body = await c.req.json<{ ids: number[] }>();
+  if (!body.ids?.length) return c.json<ApiResponse>({ success: false, error: '缺少 ids' }, 400);
+  await db.paymentAddress.deleteMany({ where: { id: { in: body.ids } } });
+  return c.json<ApiResponse>({ success: true });
+});
+
+// ── 手动解锁地址 ──
+adminRoutes.post('/payment-addresses/:id/unlock', async (c) => {
+  const id = Number(c.req.param('id'));
+  await db.paymentAddress.update({
+    where: { id },
+    data: { status: 'IDLE', lockedByUser: null, lockedOrderId: null, lockExpiresAt: null },
+  });
+  return c.json<ApiResponse>({ success: true });
+});
