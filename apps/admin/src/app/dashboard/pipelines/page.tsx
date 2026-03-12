@@ -178,10 +178,11 @@ export default function PipelinesPage() {
   const [expandedLog, setExpandedLog] = useState<number | null>(null);
   const [formCollapsed, setFormCollapsed] = useState(true);
   const [listCollapsed, setListCollapsed] = useState(true);
-  const [autoScanEnabled, setAutoScanEnabled] = useState(_adminAutoScan.running);
+  const [autoScanEnabled, setAutoScanEnabled] = useState(false);
   const [autoScanInterval, setAutoScanInterval] = useState(0);
-  const [autoScanCountdown, setAutoScanCountdown] = useState(_adminAutoScan.countdown);
-  const [autoScanCount, setAutoScanCount] = useState(_adminAutoScan.count);
+  const [autoScanCountdown, setAutoScanCountdown] = useState(0);
+  const [autoScanCount, setAutoScanCount] = useState(0);
+  const scanFnRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push('/login'); return; }
@@ -198,7 +199,7 @@ export default function PipelinesPage() {
     }
   };
 
-  // 同步全局自动扫描状态到组件 + 首次挂载时从 sessionStorage 恢复
+  // 同步全局自动扫描状态到组件
   useEffect(() => {
     const sync = () => {
       setAutoScanEnabled(_adminAutoScan.running);
@@ -206,13 +207,9 @@ export default function PipelinesPage() {
       setAutoScanCount(_adminAutoScan.count);
     };
     _adminAutoScan.listeners.add(sync);
-    // 如果全局单例未运行但 sessionStorage 有记录，恢复定时器
-    if (!_adminAutoScan.running) {
-      _adminAutoScan.restore(() => handleTriggerScan(true));
-    }
     sync();
     return () => { _adminAutoScan.listeners.delete(sync); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -338,21 +335,27 @@ export default function PipelinesPage() {
     }, 300000);
   };
 
+  // 始终保持 scanFnRef 指向最新的 handleTriggerScan
+  scanFnRef.current = () => handleTriggerScan(true);
+
   const startAutoScan = () => {
     if (autoScanInterval <= 0) return;
-    _adminAutoScan.start(autoScanInterval, () => handleTriggerScan(true));
+    _adminAutoScan.start(autoScanInterval, () => scanFnRef.current());
   };
 
   const stopAutoScan = () => {
     _adminAutoScan.stop();
   };
 
-  // 保持 scanFn 指向最新的 handleTriggerScan
+  // 挂载时: 如果全局单例未运行, 从 sessionStorage 恢复
   useEffect(() => {
-    if (_adminAutoScan.running) {
-      _adminAutoScan.scanFn = () => handleTriggerScan(true);
+    if (!_adminAutoScan.running) {
+      _adminAutoScan.restore(() => scanFnRef.current());
+    } else {
+      // 已运行但 scanFn 可能指向旧闭包, 更新它
+      _adminAutoScan.scanFn = () => scanFnRef.current();
     }
-  });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatCountdown = (seconds: number) => {
     const m = Math.floor(seconds / 60);
