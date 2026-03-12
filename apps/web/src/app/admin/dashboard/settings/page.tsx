@@ -14,7 +14,7 @@ const SETTING_LABELS: Record<string, { label: string; type: 'number' | 'boolean'
   cache_window_minutes: { label: '缓存窗口 (分钟)', type: 'number', desc: '同类扫描结果缓存复用时间' },
   max_scans_per_user_per_hour: { label: '每小时扫描上限', type: 'number', desc: '单用户每小时最多扫描次数' },
   max_concurrent_scans: { label: '最大并发扫描', type: 'number', desc: '系统同时处理的最大扫描数' },
-  token_to_cny_rate: { label: 'Token 汇率 (CNY)', type: 'number', desc: '每 Token 对应人民币价格' },
+  token_to_cny_rate: { label: 'USDT 兑换比率', type: 'number', desc: '1 USDT 可兑换的 Token 数量（如设为 10 则 1 USDT = 10 Token）' },
   maintenance_mode: { label: '维护模式', type: 'boolean', desc: '开启后所有扫描请求将返回维护提示' },
   announcement: { label: '公告', type: 'string', desc: '显示在公共主页的系统公告' },
 };
