@@ -140,41 +140,45 @@ async function approveRecharge(rechargeId: number, txId: string) {
 
 // ── 超时订单自动标记失败 + 释放地址 ──
 async function expireTimedOutOrders() {
-  // 找到所有已过期的锁定地址（lockExpiresAt < now）且关联了订单
-  const expiredAddresses = await db.paymentAddress.findMany({
-    where: {
-      status: 'LOCKED',
-      lockExpiresAt: { lt: new Date() },
-      lockedOrderId: { not: null },
-    },
+  // 1. 从设置读取锁定时长（默认15分钟）
+  let lockMinutes = 15;
+  try {
+    const setting = await db.adminSetting.findUnique({ where: { key: 'address_lock_minutes' } });
+    if (setting?.value) lockMinutes = Number(setting.value);
+  } catch {}
+  const cutoff = new Date(Date.now() - lockMinutes * 60 * 1000);
+
+  // 2. 直接按订单创建时间判断：所有 PENDING 订单创建超过 lockMinutes 分钟的，全部标记 FAILED
+  const expiredOrders = await db.rechargeRecord.findMany({
+    where: { status: 'PENDING', createdAt: { lt: cutoff } },
+    select: { id: true, note: true },
   });
 
-  for (const addr of expiredAddresses) {
-    const orderId = addr.lockedOrderId!;
-    // 将关联的 PENDING 订单标记为 FAILED
-    try {
-      await db.rechargeRecord.updateMany({
-        where: { id: orderId, status: 'PENDING' },
+  if (expiredOrders.length > 0) {
+    for (const order of expiredOrders) {
+      await db.rechargeRecord.update({
+        where: { id: order.id },
         data: {
           status: 'FAILED',
-          note: `${addr.network} 充值超时未支付，系统自动关闭`,
+          note: `${order.note || ''} | 充值超时未支付，系统自动关闭`,
         },
       });
-      console.log(`[RechargeScanner] ⏰ Order #${orderId} expired, marked as FAILED`);
-    } catch {}
 
-    // 释放地址
-    try {
-      await db.paymentAddress.update({
-        where: { id: addr.id },
-        data: { status: 'IDLE', lockedByUser: null, lockedOrderId: null, lockExpiresAt: null },
-      });
-    } catch {}
+      // 释放关联的地址
+      try {
+        await db.paymentAddress.updateMany({
+          where: { lockedOrderId: order.id },
+          data: { status: 'IDLE', lockedByUser: null, lockedOrderId: null, lockExpiresAt: null },
+        });
+      } catch {}
+
+      console.log(`[RechargeScanner] ⏰ Order #${order.id} expired (>${lockMinutes}min), marked as FAILED`);
+    }
   }
 
-  // 释放没有关联订单的过期锁定地址
+  // 3. 释放所有过期的锁定地址（兜底）
   await db.paymentAddress.updateMany({
-    where: { status: 'LOCKED', lockExpiresAt: { lt: new Date() }, lockedOrderId: null },
+    where: { status: 'LOCKED', lockExpiresAt: { lt: new Date() } },
     data: { status: 'IDLE', lockedByUser: null, lockedOrderId: null, lockExpiresAt: null },
   });
 }
