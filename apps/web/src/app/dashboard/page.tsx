@@ -451,7 +451,7 @@ export default function DashboardPage() {
                 <div className="space-y-1.5 text-xs text-slate-500">
                   <div className="flex justify-between"><span>基础扫描 (无搜索增强)</span><span className="text-slate-300">1 Token/次</span></div>
                   <div className="flex justify-between"><span>搜索增强扫描</span><span className="text-slate-300">2 Token/次</span></div>
-                  <div className="flex justify-between"><span>缓存命中</span><span className="text-emerald-400">免费</span></div>
+                  <div className="flex justify-between"><span>扫描结果有效期</span><span className="text-slate-300">5 分钟</span></div>
                 </div>
               </div>
             </div>
