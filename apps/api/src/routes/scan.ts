@@ -27,7 +27,7 @@ async function getSetting<T>(key: string, fallback: T): Promise<T> {
 scanRoutes.post('/request', async (c) => {
   const userId = c.get('userId');
   const body = await c.req.json<{ enableSearch?: boolean }>().catch(() => ({}));
-  const enableSearch = (body as any)?.enableSearch !== false;
+  const enableSearch = true; // 所有扫描均含搜索增强
 
   // 辅助: 创建失败记录并返回错误
   const failAndRecord = async (errorMessage: string, statusCode: number, cost = 0) => {
@@ -69,9 +69,7 @@ scanRoutes.post('/request', async (c) => {
   const isActualBilling = String(billingMode) === 'actual';
 
   // 计算费用 (固定模式预扣; 实际模式仅检查余额 > 0)
-  const basicPrice = await getSetting('scan_price_basic', 1);
-  const searchPrice = await getSetting('scan_price_with_search', 2);
-  const fixedCost = enableSearch ? searchPrice : basicPrice;
+  const fixedCost = await getSetting('scan_price_fixed', 2);
 
   // 检查余额
   const user = await db.user.findUnique({ where: { id: userId } });

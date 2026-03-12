@@ -9,9 +9,6 @@ const SETTING_LABELS: Record<string, { label: string; type: 'number' | 'boolean'
   registration_enabled: { label: '开放注册', type: 'boolean', desc: '是否允许新用户注册' },
   auto_scan_interval_minutes: { label: '定时扫描间隔 (分钟)', type: 'number', desc: '后台自动执行300信号扫描的间隔，设为 0 则关闭自动扫描。扫描结果会缓存，缓存窗口内的用户请求直接推送缓存内容' },
   new_user_bonus_tokens: { label: '新用户赠送 Token', type: 'number', desc: '注册赠送的 Token 数量' },
-  billing_mode: { label: '计费模式', type: 'string', desc: '填 fixed = 固定费用（按下方设置扣费）；填 actual = 按实际 LLM Token 消耗扣费（缓存命中免费）' },
-  scan_price_basic: { label: '基础扫描费用', type: 'number', desc: '固定模式下每次基础扫描消耗的 Token' },
-  scan_price_with_search: { label: '搜索增强扫描费用', type: 'number', desc: '固定模式下含搜索增强的扫描消耗 Token' },
   cache_window_minutes: { label: '缓存窗口 (分钟)', type: 'number', desc: '同类扫描结果缓存复用时间' },
   max_scans_per_user_per_hour: { label: '每小时扫描上限', type: 'number', desc: '单用户每小时最多扫描次数' },
   max_concurrent_scans: { label: '最大并发扫描', type: 'number', desc: '系统同时处理的最大扫描数' },
@@ -249,6 +246,79 @@ export default function SettingsPage() {
           系统设置
         </h1>
         <p className="text-sm text-slate-500 mt-2 ml-[52px]">管理 Sentinel-X 的全局运行参数</p>
+      </div>
+
+      {/* 计费模式卡片 */}
+      <div className="p-5 rounded-2xl bg-white/[0.02] border border-slate-800/40 hover:border-slate-700/50 transition-colors">
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-[15px] font-semibold text-slate-200">计费模式</label>
+          <button
+            onClick={async () => {
+              setSaving('billing_mode');
+              await adminApi.updateSetting('billing_mode', settings.billing_mode || 'actual');
+              if (settings.billing_mode === 'fixed') {
+                await adminApi.updateSetting('scan_price_fixed', settings.scan_price_fixed ?? 0);
+              }
+              setSaving(null);
+            }}
+            disabled={saving === 'billing_mode'}
+            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-orange-400 px-2 py-1 rounded-lg hover:bg-white/5 transition-all"
+          >
+            {saving === 'billing_mode' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+            保存
+          </button>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">每次扫描均含搜索增强，选择按实际 LLM 消耗或固定数量扣费</p>
+        <div className="flex flex-col gap-3">
+          <label
+            className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer border transition-all ${
+              (settings.billing_mode || 'actual') === 'actual'
+                ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300'
+                : 'bg-slate-800/40 border-slate-700/40 text-slate-400 hover:border-slate-600/60'
+            }`}
+            onClick={() => setSettings({ ...settings, billing_mode: 'actual' })}
+          >
+            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+              (settings.billing_mode || 'actual') === 'actual' ? 'border-cyan-400' : 'border-slate-600'
+            }`}>
+              {(settings.billing_mode || 'actual') === 'actual' && <div className="w-2 h-2 rounded-full bg-cyan-400" />}
+            </div>
+            <div>
+              <span className="text-sm font-medium">按实际 Token 消耗扣费</span>
+              <p className="text-xs text-slate-500 mt-0.5">每次扣除实际 LLM 调用产生的 Token 数量，缓存命中时扣除产生该缓存的原始 Token 数</p>
+            </div>
+          </label>
+          <label
+            className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer border transition-all ${
+              settings.billing_mode === 'fixed'
+                ? 'bg-orange-500/10 border-orange-500/30 text-orange-300'
+                : 'bg-slate-800/40 border-slate-700/40 text-slate-400 hover:border-slate-600/60'
+            }`}
+            onClick={() => setSettings({ ...settings, billing_mode: 'fixed' })}
+          >
+            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+              settings.billing_mode === 'fixed' ? 'border-orange-400' : 'border-slate-600'
+            }`}>
+              {settings.billing_mode === 'fixed' && <div className="w-2 h-2 rounded-full bg-orange-400" />}
+            </div>
+            <div className="flex items-center gap-3 flex-1">
+              <div>
+                <span className="text-sm font-medium">固定模式扣 Token</span>
+                <p className="text-xs text-slate-500 mt-0.5">每次扫描扣除固定数量的 Token</p>
+              </div>
+              {settings.billing_mode === 'fixed' && (
+                <input
+                  type="number"
+                  value={settings.scan_price_fixed ?? 2}
+                  onChange={(e) => setSettings({ ...settings, scan_price_fixed: parseInt(e.target.value) || 0 })}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-28 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-sm text-white focus:border-orange-500/50 focus:outline-none"
+                  placeholder="Token 数"
+                />
+              )}
+            </div>
+          </label>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
