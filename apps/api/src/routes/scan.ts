@@ -29,10 +29,29 @@ scanRoutes.post('/request', async (c) => {
   const body = await c.req.json<{ enableSearch?: boolean }>().catch(() => ({}));
   const enableSearch = (body as any)?.enableSearch !== false;
 
+  // 辅助: 创建失败记录并返回错误
+  const failAndRecord = async (errorMessage: string, statusCode: number, cost = 0) => {
+    const failBriefingId = `fail_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    await db.scanRecord.create({
+      data: {
+        userId,
+        briefingId: failBriefingId,
+        tokenCost: 0,
+        status: 'FAILED',
+        isCached: false,
+        enableSearch,
+        errorMessage,
+        startedAt: new Date(),
+        completedAt: new Date(),
+      },
+    });
+    return c.json<ApiResponse>({ success: false, error: errorMessage }, statusCode as any);
+  };
+
   // 检查维护模式
   const maintenance = await getSetting('maintenance_mode', false);
   if (maintenance) {
-    return c.json<ApiResponse>({ success: false, error: '服务正在维护中，请稍后再试' }, 503);
+    return failAndRecord('服务正在维护中，请稍后再试', 503);
   }
 
   // 频率限制
@@ -42,7 +61,7 @@ scanRoutes.post('/request', async (c) => {
     where: { userId, startedAt: { gte: oneHourAgo } },
   });
   if (recentCount >= maxPerHour) {
-    return c.json<ApiResponse>({ success: false, error: `每小时最多请求 ${maxPerHour} 次扫描` }, 429);
+    return failAndRecord(`每小时最多请求 ${maxPerHour} 次扫描`, 429);
   }
 
   // 计算费用
@@ -53,10 +72,8 @@ scanRoutes.post('/request', async (c) => {
   // 检查余额
   const user = await db.user.findUnique({ where: { id: userId } });
   if (!user || Number(user.tokenBalance) < tokenCost) {
-    return c.json<ApiResponse>({
-      success: false,
-      error: `Token 余额不足，需要 ${tokenCost} Token，当前余额 ${Number(user?.tokenBalance ?? 0)}`,
-    }, 402);
+    const errMsg = `Token 余额不足，需要 ${tokenCost} Token，当前余额 ${Number(user?.tokenBalance ?? 0)}`;
+    return failAndRecord(errMsg, 402);
   }
 
   // 检查缓存

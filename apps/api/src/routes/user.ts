@@ -159,10 +159,11 @@ userRoutes.get('/scans', async (c) => {
   const page = Math.max(1, Number(c.req.query('page')) || 1);
   const pageSize = Math.min(50, Math.max(1, Number(c.req.query('pageSize')) || 20));
 
+  const where = { userId, briefingId: { not: { startsWith: 'admin-' } } };
   const [total, scans] = await Promise.all([
-    db.scanRecord.count({ where: { userId } }),
+    db.scanRecord.count({ where }),
     db.scanRecord.findMany({
-      where: { userId },
+      where,
       orderBy: { startedAt: 'desc' },
       skip: (page - 1) * pageSize,
       take: pageSize,
