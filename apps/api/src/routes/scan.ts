@@ -164,6 +164,10 @@ scanRoutes.post('/request', async (c) => {
   }
 
   // 无缓存: 创建待处理扫描记录，交由 Worker 处理
+  // 查询管线信息，填充 SystemScanLog
+  const analyzer = await db.pipelineConfig.findFirst({ where: { role: { in: ['ANALYZER', 'ANALYZER_BACKUP'] }, enabled: true }, orderBy: { priority: 'asc' } });
+  const searcher = enableSearch ? await db.pipelineConfig.findFirst({ where: { role: 'SEARCHER', enabled: true } }) : null;
+
   await db.scanRecord.create({
     data: {
       userId,
@@ -173,6 +177,19 @@ scanRoutes.post('/request', async (c) => {
       isCached: false,
       enableSearch,
       startedAt: new Date(),
+    },
+  });
+
+  // 为用户扫描也创建 SystemScanLog，这样 scanWorker 完成时能写入 token 统计
+  await db.systemScanLog.create({
+    data: {
+      briefingId,
+      status: 'PENDING',
+      enableSearch,
+      searcherProvider: searcher?.provider || null,
+      searcherModel: searcher?.model || null,
+      analyzerProvider: analyzer?.provider || null,
+      analyzerModel: analyzer?.model || null,
     },
   });
 
@@ -210,13 +227,39 @@ scanRoutes.get('/briefings', async (c) => {
     take: limit,
   });
 
-  // Token 统计直接从 briefingData._tokenUsage 读取（scanWorker 写入时嵌入）
-  // 缓存命中时 briefingData 是从原始扫描的 scanCache 复制的，自动继承 _tokenUsage
+  // Token 统计: 优先从 SystemScanLog 读取，回退到 briefingData._tokenUsage
+  // 对缓存记录，追溯原始扫描的 SystemScanLog
+  const directBriefingIds = records.filter(r => !r.isCached).map(r => r.briefingId);
+  const cachedRecordsWithCache = records.filter(r => r.isCached && r.cacheId);
+  const cacheIds = cachedRecordsWithCache.map(r => r.cacheId!);
+  // 查找产生缓存的原始扫描记录的 briefingId
+  const originalRecords = cacheIds.length > 0
+    ? await db.scanRecord.findMany({
+        where: { cacheId: { in: cacheIds }, isCached: false },
+        select: { cacheId: true, briefingId: true },
+      })
+    : [];
+  const cacheToOrigBriefing = new Map(originalRecords.map(r => [r.cacheId!, r.briefingId]));
+  const allSysLogIds = [...new Set([...directBriefingIds, ...originalRecords.map(r => r.briefingId)])];
+  const sysLogs = allSysLogIds.length > 0
+    ? await db.systemScanLog.findMany({ where: { briefingId: { in: allSysLogIds } } })
+    : [];
+  const sysLogMap = new Map(sysLogs.map(l => [l.briefingId, l]));
+
   const briefings: BriefingResponse[] = records
     .filter((r) => r.briefingData)
     .map((r) => {
       const d = r.briefingData as any;
+      // 对缓存记录，用原始扫描的 briefingId 查 SystemScanLog
+      const lookupId = r.isCached && r.cacheId
+        ? cacheToOrigBriefing.get(r.cacheId) || r.briefingId
+        : r.briefingId;
+      const sl = sysLogMap.get(lookupId);
+      // 优先 SystemScanLog，回退到 briefingData._tokenUsage
       const tu = d._tokenUsage;
+      const searchTok = sl?.tokenCostSearch || tu?.searchTokens || 0;
+      const analyzeTok = sl?.tokenCostAnalyze || tu?.analyzeTokens || 0;
+      const totalTok = sl?.tokenCostTotal || tu?.totalTokens || 0;
       return {
         briefingId: r.briefingId,
         timestamp: r.completedAt?.getTime() ?? r.startedAt.getTime(),
@@ -233,9 +276,9 @@ scanRoutes.get('/briefings', async (c) => {
           analyzerProvider: 'unknown',
         },
         serverTokenUsage: {
-          searchTokens: tu?.searchTokens ?? 0,
-          analyzeTokens: tu?.analyzeTokens ?? 0,
-          totalTokens: tu?.totalTokens ?? 0,
+          searchTokens: searchTok,
+          analyzeTokens: analyzeTok,
+          totalTokens: totalTok,
         },
       };
     });
