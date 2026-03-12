@@ -239,52 +239,62 @@ userRoutes.post('/recharge', async (c) => {
   const lockMinutes = Number(await getSetting('address_lock_minutes', 15));
   const lockExpiresAt = new Date(Date.now() + lockMinutes * 60 * 1000);
 
-  // 创建充值记录
-  const record = await db.rechargeRecord.create({
-    data: {
-      userId,
-      amount: BigInt(Math.round(amount * 100)),
-      method: 'USDT',
-      status: 'PENDING',
-      note: `${amount} USDT via ${network}`,
-    },
-  });
-
-  // 尝试分配地址：找到一个空闲地址并锁定
-  let walletAddress = USDT_WALLET_ADDRESS;
-  let assignedNetwork = network;
-
-  const idleAddr = await db.paymentAddress.findFirst({
-    where: { network, status: 'IDLE' },
-    orderBy: { id: 'asc' },
-  });
-
-  if (idleAddr) {
-    await db.paymentAddress.update({
-      where: { id: idleAddr.id },
+  // 在事务中原子地：创建订单 + 分配并锁定地址（FOR UPDATE SKIP LOCKED 防并发冲突）
+  const result = await db.$transaction(async (tx) => {
+    // 创建充值记录
+    const record = await tx.rechargeRecord.create({
       data: {
-        status: 'LOCKED',
-        lockExpiresAt,
-        lockedByUser: userId,
-        lockedOrderId: record.id,
+        userId,
+        amount: BigInt(Math.round(amount * 100)),
+        method: 'USDT',
+        status: 'PENDING',
+        note: `${amount} USDT via ${network}`,
       },
     });
-    walletAddress = idleAddr.address;
-  }
-  // 如果没有空闲地址，使用默认硬编码地址
+
+    // 用 FOR UPDATE SKIP LOCKED 原子抢占一个空闲地址
+    const rows: any[] = await tx.$queryRaw`
+      SELECT id, address FROM "payment_addresses"
+      WHERE network = ${network} AND status = 'IDLE'
+      ORDER BY id ASC
+      LIMIT 1
+      FOR UPDATE SKIP LOCKED
+    `;
+
+    let walletAddress = USDT_WALLET_ADDRESS;
+    let addressLocked = false;
+
+    if (rows.length > 0) {
+      const addrId = rows[0].id;
+      walletAddress = rows[0].address;
+
+      await tx.paymentAddress.update({
+        where: { id: addrId },
+        data: {
+          status: 'LOCKED',
+          lockExpiresAt,
+          lockedByUser: userId,
+          lockedOrderId: record.id,
+        },
+      });
+      addressLocked = true;
+    }
+
+    return { record, walletAddress, addressLocked };
+  });
 
   const orderExpiresAt = new Date(Date.now() + RECHARGE_EXPIRY_MINUTES * 60 * 1000);
 
   return c.json<ApiResponse<RechargeOrderResponse>>({
     success: true,
     data: {
-      id: record.id,
+      id: result.record.id,
       usdtAmount: amount,
-      walletAddress,
-      network: assignedNetwork,
+      walletAddress: result.walletAddress,
+      network,
       status: 'PENDING',
       expiresAt: orderExpiresAt.toISOString(),
-      lockExpiresAt: idleAddr ? lockExpiresAt.toISOString() : undefined,
+      lockExpiresAt: result.addressLocked ? lockExpiresAt.toISOString() : undefined,
     } as any,
   }, 201);
 });
