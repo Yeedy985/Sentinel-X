@@ -54,15 +54,20 @@ adminRoutes.get('/dashboard', async (c) => {
   todayStart.setHours(0, 0, 0, 0);
   const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
 
+  // 读取汇率: 1 USDT = N Token
+  const rateSetting = await db.adminSetting.findUnique({ where: { key: 'token_to_cny_rate' } });
+  const tokenRate = Number(rateSetting?.value ?? 10); // 默认 10
+
   // 今日统计
   const todayScans = await db.scanRecord.findMany({
     where: { startedAt: { gte: todayStart }, status: 'COMPLETED' },
   });
   const todayRealScans = todayScans.filter(s => !s.isCached).length;
   const todayCachedScans = todayScans.filter(s => s.isCached).length;
-  const todayRevenue = todayScans.reduce((s, r) => s + Number(r.revenueUsd), 0);
-  const todayCost = todayScans.reduce((s, r) => s + Number(r.realCostUsd), 0);
-  const todayProfit = todayRevenue - todayCost;
+  const todayTokenRevenue = todayScans.reduce((s, r) => s + r.tokenCost, 0);
+  const todayRevenueUsd = tokenRate > 0 ? todayTokenRevenue / tokenRate : 0;
+  const todayCost = todayScans.filter(s => !s.isCached).reduce((s, r) => s + Number(r.realCostUsd), 0);
+  const todayProfit = todayRevenueUsd - todayCost;
 
   const todayActiveUsers = await db.scanRecord.groupBy({
     by: ['userId'],
@@ -77,13 +82,14 @@ adminRoutes.get('/dashboard', async (c) => {
   });
 
   // 本月统计
-  const monthScans = await db.scanRecord.count({
+  const monthScans = await db.scanRecord.findMany({
     where: { startedAt: { gte: monthStart }, status: 'COMPLETED' },
   });
-  const monthFinance = await db.scanRecord.aggregate({
-    where: { startedAt: { gte: monthStart }, status: 'COMPLETED' },
-    _sum: { revenueUsd: true, realCostUsd: true, profitUsd: true },
-  });
+  const monthTokenRevenue = monthScans.reduce((s, r) => s + r.tokenCost, 0);
+  const monthRevenueUsd = tokenRate > 0 ? monthTokenRevenue / tokenRate : 0;
+  const monthCost = monthScans.filter(s => !s.isCached).reduce((s, r) => s + Number(r.realCostUsd), 0);
+  const monthProfit = monthRevenueUsd - monthCost;
+
   const monthNewUsers = await db.user.count({
     where: { createdAt: { gte: monthStart } },
   });
@@ -92,27 +98,30 @@ adminRoutes.get('/dashboard', async (c) => {
     _sum: { amount: true },
   });
 
-  return c.json<ApiResponse<AdminDashboardStats>>({
+  return c.json<ApiResponse>({
     success: true,
     data: {
+      tokenRate,
       today: {
         totalScans: todayScans.length,
         realScans: todayRealScans,
         cachedScans: todayCachedScans,
         cacheHitRate: todayScans.length > 0 ? todayCachedScans / todayScans.length : 0,
-        revenue: todayRevenue,
+        tokenRevenue: todayTokenRevenue,
+        revenueUsd: todayRevenueUsd,
         cost: todayCost,
         profit: todayProfit,
-        profitRate: todayRevenue > 0 ? todayProfit / todayRevenue : 0,
+        profitRate: todayRevenueUsd > 0 ? todayProfit / todayRevenueUsd : 0,
         activeUsers: todayActiveUsers.length,
         newUsers: todayNewUsers,
         rechargeTotal: Number(todayRecharge._sum.amount ?? 0),
       },
       thisMonth: {
-        totalScans: monthScans,
-        revenue: Number(monthFinance._sum.revenueUsd ?? 0),
-        cost: Number(monthFinance._sum.realCostUsd ?? 0),
-        profit: Number(monthFinance._sum.profitUsd ?? 0),
+        totalScans: monthScans.length,
+        tokenRevenue: monthTokenRevenue,
+        revenueUsd: monthRevenueUsd,
+        cost: monthCost,
+        profit: monthProfit,
         newUsers: monthNewUsers,
         rechargeTotal: Number(monthRecharge._sum.amount ?? 0),
       },

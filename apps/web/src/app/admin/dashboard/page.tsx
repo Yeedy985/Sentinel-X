@@ -77,6 +77,7 @@ export default function AdminDashboardPage() {
 
   const today = stats?.today || {};
   const month = stats?.thisMonth || {};
+  const tokenRate = stats?.tokenRate || 10;
 
   return (
     <div className="p-5 xl:p-6 space-y-6">
@@ -90,9 +91,9 @@ export default function AdminDashboardPage() {
         <h2 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wider">今日概览</h2>
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
           <StatCard icon={Activity} label="今日扫描" value={today.totalScans ?? 0} color="text-emerald-400" bg="bg-emerald-500/8" sub={`真实 ${today.realScans ?? 0} · 缓存 ${today.cachedScans ?? 0}`} />
-          <StatCard icon={Coins} label="今日收入" value={`$${(today.revenue ?? 0).toFixed(2)}`} color="text-amber-400" bg="bg-amber-500/8" sub={`成本 $${(today.cost ?? 0).toFixed(2)}`} />
+          <StatCard icon={Coins} label="今日收入" value={`${(today.tokenRevenue ?? 0).toLocaleString()} Token`} color="text-amber-400" bg="bg-amber-500/8" sub={`≈ $${(today.revenueUsd ?? 0).toFixed(4)} · 成本 $${(today.cost ?? 0).toFixed(4)}`} />
           <StatCard icon={Users} label="活跃用户" value={today.activeUsers ?? 0} color="text-cyan-400" bg="bg-cyan-500/8" sub={`新注册 ${today.newUsers ?? 0}`} />
-          <StatCard icon={AlertTriangle} label="今日利润" value={`$${(today.profit ?? 0).toFixed(2)}`} color={(today.profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'} bg={(today.profit ?? 0) >= 0 ? 'bg-emerald-500/8' : 'bg-red-500/8'} sub={`利润率 ${today.revenue > 0 ? ((today.profitRate ?? 0) * 100).toFixed(1) : 0}%`} />
+          <StatCard icon={AlertTriangle} label="今日利润" value={`$${(today.profit ?? 0).toFixed(4)}`} color={(today.profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'} bg={(today.profit ?? 0) >= 0 ? 'bg-emerald-500/8' : 'bg-red-500/8'} sub={`收入 $${(today.revenueUsd ?? 0).toFixed(4)} - 成本 $${(today.cost ?? 0).toFixed(4)}`} />
         </div>
       </div>
 
@@ -102,9 +103,10 @@ export default function AdminDashboardPage() {
           <h3 className="text-[15px] font-semibold text-slate-300 mb-4">本月统计</h3>
           <div className="space-y-2.5">
             <DetailRow label="总扫描" value={`${month.totalScans ?? 0} 次`} />
-            <DetailRow label="总收入 (USD)" value={`$${(month.revenue ?? 0).toFixed(2)}`} />
-            <DetailRow label="总 LLM 成本" value={`$${(month.cost ?? 0).toFixed(2)}`} />
-            <DetailRow label="净利润" value={`$${(month.profit ?? 0).toFixed(2)}`} />
+            <DetailRow label="总收入 (Token)" value={`${(month.tokenRevenue ?? 0).toLocaleString()} Token`} />
+            <DetailRow label="总收入 (USD)" value={`$${(month.revenueUsd ?? 0).toFixed(4)}`} />
+            <DetailRow label="总 LLM 成本" value={`$${(month.cost ?? 0).toFixed(4)}`} />
+            <DetailRow label="净利润" value={`$${(month.profit ?? 0).toFixed(4)}`} />
             <DetailRow label="新注册用户" value={`${month.newUsers ?? 0} 人`} />
             <DetailRow label="充值总额" value={`${month.rechargeTotal ?? 0}`} />
           </div>
@@ -114,10 +116,12 @@ export default function AdminDashboardPage() {
           <div className="space-y-2.5">
             <DetailRow label="缓存命中率" value={`${today.totalScans > 0 ? ((today.cacheHitRate ?? 0) * 100).toFixed(1) : 0}%`} />
             <DetailRow label="今日充值" value={`${today.rechargeTotal ?? 0}`} />
+            <DetailRow label="汇率" value={`1 USDT = ${tokenRate} Token`} />
+            <DetailRow label="收入 (Token)" value={`${(today.tokenRevenue ?? 0).toLocaleString()} Token`} />
+            <DetailRow label="收入 (USD)" value={`$${(today.revenueUsd ?? 0).toFixed(4)}`} />
             <DetailRow label="LLM 成本" value={`$${(today.cost ?? 0).toFixed(4)}`} />
-            <DetailRow label="收入 (USD)" value={`$${(today.revenue ?? 0).toFixed(4)}`} />
             <DetailRow label="净利润" value={`$${(today.profit ?? 0).toFixed(4)}`} />
-            <DetailRow label="利润率" value={`${today.revenue > 0 ? ((today.profitRate ?? 0) * 100).toFixed(1) : 0}%`} />
+            <DetailRow label="利润率" value={`${today.revenueUsd > 0 ? ((today.profitRate ?? 0) * 100).toFixed(1) : 0}%`} />
           </div>
         </div>
       </div>
