@@ -252,33 +252,41 @@ userRoutes.post('/recharge', async (c) => {
       },
     });
 
-    // 用 FOR UPDATE SKIP LOCKED 原子抢占一个空闲地址
-    const rows: any[] = await tx.$queryRaw`
-      SELECT id, address FROM "payment_addresses"
-      WHERE network = ${network}::"PaymentNetwork" AND status = 'IDLE'::"AddressStatus"
-      ORDER BY id ASC
-      LIMIT 1
-      FOR UPDATE SKIP LOCKED
-    `;
+    // 原子抢占空闲地址：先找一个 IDLE 地址，再用 updateMany 带条件更新（只有仍为 IDLE 才成功）
+    // 如果并发时被别人先抢了，updateMany 返回 count=0，重试下一个
+    const idleCandidates = await tx.paymentAddress.findMany({
+      where: { network, status: 'IDLE' },
+      orderBy: { id: 'asc' },
+      take: 10,
+      select: { id: true, address: true },
+    });
 
-    if (rows.length === 0) {
-      // 没有可用地址，回滚事务（删除刚创建的订单）
+    let walletAddress = '';
+    let grabbed = false;
+
+    for (const candidate of idleCandidates) {
+      // 带条件更新：只有状态仍为 IDLE 时才锁定（原子操作，防并发）
+      const updated = await tx.paymentAddress.updateMany({
+        where: { id: candidate.id, status: 'IDLE' },
+        data: {
+          status: 'LOCKED',
+          lockExpiresAt,
+          lockedByUser: userId,
+          lockedOrderId: record.id,
+        },
+      });
+      if (updated.count > 0) {
+        walletAddress = candidate.address;
+        grabbed = true;
+        break;
+      }
+      // count=0 说明被别人抢了，试下一个
+    }
+
+    if (!grabbed) {
       await tx.rechargeRecord.delete({ where: { id: record.id } });
       return { noAddress: true } as any;
     }
-
-    const addrId = rows[0].id;
-    const walletAddress = rows[0].address;
-
-    await tx.paymentAddress.update({
-      where: { id: addrId },
-      data: {
-        status: 'LOCKED',
-        lockExpiresAt,
-        lockedByUser: userId,
-        lockedOrderId: record.id,
-      },
-    });
 
     return { record, walletAddress, noAddress: false };
   });
