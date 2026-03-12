@@ -7,6 +7,7 @@ import {
   Shield, Coins, Key, History, FileText, LogOut, Plus, Copy, Trash2,
   Loader2, ChevronLeft, ChevronRight, Wallet, ArrowRightLeft,
   CircleDollarSign, CheckCircle2, Clock, XCircle, QrCode, ExternalLink,
+  Activity, Zap, TrendingUp,
 } from 'lucide-react';
 import { api, clearToken, isLoggedIn } from '@/lib/api';
 
@@ -177,97 +178,115 @@ export default function DashboardPage() {
 
   const statusBadge = (status: string) => {
     switch (status) {
-      case 'PENDING': return <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20"><Clock className="w-3 h-3" />待支付</span>;
-      case 'COMPLETED': return <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><CheckCircle2 className="w-3 h-3" />已完成</span>;
-      case 'FAILED': return <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20"><XCircle className="w-3 h-3" />失败</span>;
+      case 'PENDING': return <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/15"><Clock className="w-3 h-3" />待支付</span>;
+      case 'COMPLETED': return <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/15"><CheckCircle2 className="w-3 h-3" />已完成</span>;
+      case 'FAILED': return <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2.5 py-1 rounded-full bg-red-500/10 text-red-400 border border-red-500/15"><XCircle className="w-3 h-3" />失败</span>;
       default: return <span className="text-[10px] text-slate-500">{status}</span>;
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+        <p className="text-sm text-slate-500 tracking-wide">加载中...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <nav className="border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-bold">
-            <Shield className="w-5 h-5 text-cyan-400" />
-            Sentinel-X
-          </Link>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5 text-sm">
-              <Coins className="w-4 h-4 text-amber-400" />
-              <span className="font-medium">{profile?.tokenBalance ?? 0}</span>
-              <span className="text-slate-500">Token</span>
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900">
+      {/* ─── Header ─── */}
+      <nav className="border-b border-white/[0.06] bg-slate-950/90 backdrop-blur-2xl sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:shadow-cyan-500/30 transition-shadow">
+              <Shield className="w-4 h-4 text-white" />
             </div>
-            <span className="text-xs text-slate-500">{profile?.email}</span>
-            <button onClick={handleLogout} className="p-1.5 text-slate-500 hover:text-red-400 transition-colors">
+            <span className="text-lg font-bold tracking-tight">Sentinel-X</span>
+          </Link>
+          <div className="flex items-center gap-5">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/[0.08] border border-amber-500/15">
+              <Coins className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-sm font-semibold text-amber-300 tabular-nums">{profile?.tokenBalance ?? 0}</span>
+              <span className="text-xs text-amber-400/50">Token</span>
+            </div>
+            <span className="text-xs text-slate-500 hidden sm:inline">{profile?.email}</span>
+            <button onClick={handleLogout} className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all">
               <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
       </nav>
 
-      <div className="max-w-6xl mx-auto px-6 py-8">
-        {/* Global Message */}
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+        {/* ─── Global Message ─── */}
         {message && (
-          <div className={`mb-6 p-3 rounded-xl text-sm flex items-center gap-2 ${message.type === 'success' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border border-red-500/20 text-red-400'}`}>
-            {message.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
-            {message.text}
+          <div className={`p-4 rounded-2xl text-sm flex items-center gap-3 backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300 ${
+            message.type === 'success'
+              ? 'bg-emerald-500/[0.08] border border-emerald-500/20 text-emerald-300'
+              : 'bg-red-500/[0.08] border border-red-500/20 text-red-300'
+          }`}>
+            {message.type === 'success' ? <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" /> : <XCircle className="w-5 h-5 shrink-0 text-red-400" />}
+            <span className="font-medium">{message.text}</span>
           </div>
         )}
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/20">
-            <div className="flex items-center gap-2 text-xs text-amber-400/70 mb-2"><Coins className="w-3.5 h-3.5" />Token 余额</div>
-            <div className="text-3xl font-bold text-amber-400">{profile?.tokenBalance ?? 0}</div>
-            <div className="text-[10px] text-slate-500 mt-1">1 Token = 1次基础扫描</div>
+        {/* ─── Stats Cards ─── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="group relative p-5 rounded-2xl bg-gradient-to-br from-amber-500/[0.08] to-orange-600/[0.04] border border-amber-500/15 hover:border-amber-500/25 transition-all duration-300">
+            <div className="flex items-center gap-2 text-xs font-medium text-amber-400/60 mb-3 tracking-wide uppercase">
+              <Coins className="w-3.5 h-3.5" />Token 余额
+            </div>
+            <div className="text-4xl font-extrabold text-amber-400 tracking-tight tabular-nums">{profile?.tokenBalance ?? 0}</div>
+            <div className="text-[11px] text-slate-500 mt-2">1 Token = 1次基础扫描</div>
           </div>
-          <div className="p-4 rounded-xl bg-gradient-to-br from-cyan-500/10 to-cyan-600/5 border border-cyan-500/20">
-            <div className="flex items-center gap-2 text-xs text-cyan-400/70 mb-2"><CircleDollarSign className="w-3.5 h-3.5" />兑换费率</div>
-            <div className="text-3xl font-bold text-cyan-400">1:{USDT_RATE}</div>
-            <div className="text-[10px] text-slate-500 mt-1">1 USDT = {USDT_RATE} Token</div>
+          <div className="group relative p-5 rounded-2xl bg-gradient-to-br from-cyan-500/[0.08] to-blue-600/[0.04] border border-cyan-500/15 hover:border-cyan-500/25 transition-all duration-300">
+            <div className="flex items-center gap-2 text-xs font-medium text-cyan-400/60 mb-3 tracking-wide uppercase">
+              <TrendingUp className="w-3.5 h-3.5" />兑换费率
+            </div>
+            <div className="text-4xl font-extrabold text-cyan-400 tracking-tight">1<span className="text-lg text-cyan-500/60 mx-0.5">:</span>{USDT_RATE}</div>
+            <div className="text-[11px] text-slate-500 mt-2">1 USDT = {USDT_RATE} Token</div>
           </div>
-          <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/50">
-            <div className="flex items-center gap-2 text-xs text-slate-400 mb-2"><Key className="w-3.5 h-3.5" />API 令牌</div>
-            <div className="text-3xl font-bold text-slate-200">{tokens.filter(t => !t.isRevoked).length}</div>
-            <div className="text-[10px] text-slate-500 mt-1">有效令牌数</div>
+          <div className="group relative p-5 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all duration-300">
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-400/60 mb-3 tracking-wide uppercase">
+              <Key className="w-3.5 h-3.5" />API 令牌
+            </div>
+            <div className="text-4xl font-extrabold text-slate-200 tracking-tight tabular-nums">{tokens.filter(t => !t.isRevoked).length}</div>
+            <div className="text-[11px] text-slate-500 mt-2">有效令牌数</div>
           </div>
-          <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/50">
-            <div className="flex items-center gap-2 text-xs text-slate-400 mb-2"><Shield className="w-3.5 h-3.5" />账号状态</div>
-            <div className="text-3xl font-bold text-emerald-400">{profile?.status === 'ACTIVE' ? '正常' : '异常'}</div>
-            <div className="text-[10px] text-slate-500 mt-1">注册于 {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('zh-CN') : '-'}</div>
+          <div className="group relative p-5 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all duration-300">
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-400/60 mb-3 tracking-wide uppercase">
+              <Activity className="w-3.5 h-3.5" />账号状态
+            </div>
+            <div className="text-4xl font-extrabold tracking-tight">
+              <span className={profile?.status === 'ACTIVE' ? 'text-emerald-400' : 'text-red-400'}>{profile?.status === 'ACTIVE' ? '正常' : '异常'}</span>
+            </div>
+            <div className="text-[11px] text-slate-500 mt-2">注册于 {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('zh-CN') : '-'}</div>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6 border-b border-slate-800/50 overflow-x-auto">
+        {/* ─── Tabs ─── */}
+        <div className="flex gap-1 border-b border-white/[0.06] overflow-x-auto pb-px">
           {([
             { key: 'recharge' as TabKey, label: 'USDT 充值', icon: Wallet },
             { key: 'history' as TabKey, label: '充值记录', icon: History },
             { key: 'tokens' as TabKey, label: 'API 令牌', icon: Key },
             { key: 'transactions' as TabKey, label: 'Token 流水', icon: FileText },
-            { key: 'scans' as TabKey, label: '扫描记录', icon: History },
+            { key: 'scans' as TabKey, label: '扫描记录', icon: Zap },
           ]).map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              className={`relative flex items-center gap-2 px-5 py-3 text-[13px] font-semibold tracking-wide transition-all whitespace-nowrap ${
                 tab === key
-                  ? 'border-cyan-400 text-cyan-400'
-                  : 'border-transparent text-slate-500 hover:text-slate-300'
+                  ? 'text-cyan-400'
+                  : 'text-slate-500 hover:text-slate-300'
               }`}
             >
               <Icon className="w-4 h-4" />
               {label}
+              {tab === key && <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full" />}
             </button>
           ))}
         </div>
@@ -277,27 +296,32 @@ export default function DashboardPage() {
           <div className="grid md:grid-cols-2 gap-6">
             {/* Left: Create Recharge Order */}
             <div className="space-y-6">
-              <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800/50 space-y-4">
-                <h3 className="text-base font-semibold flex items-center gap-2">
-                  <CircleDollarSign className="w-5 h-5 text-cyan-400" />
-                  USDT 充值
-                </h3>
-                <p className="text-xs text-slate-500">
-                  通过 USDT (TRC20) 充值后兑换为 Sentinel-X Token。费率: <span className="text-cyan-400 font-medium">1 USDT = {USDT_RATE} Token</span>
-                </p>
+              <div className="p-7 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-5">
+                <div>
+                  <h3 className="text-[15px] font-bold flex items-center gap-2.5 tracking-tight">
+                    <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                      <CircleDollarSign className="w-4 h-4 text-cyan-400" />
+                    </div>
+                    USDT 充值
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-2 ml-[42px] leading-relaxed">
+                    通过 USDT (TRC20) 充值后兑换为 Token<br />
+                    费率: <span className="text-cyan-400 font-semibold">1 USDT = {USDT_RATE} Token</span>
+                  </p>
+                </div>
 
                 {/* Quick Amounts */}
                 <div>
-                  <label className="text-xs text-slate-500 mb-2 block">快捷金额</label>
+                  <label className="text-[11px] font-medium text-slate-500 mb-2.5 block uppercase tracking-wider">快捷金额</label>
                   <div className="flex flex-wrap gap-2">
                     {QUICK_AMOUNTS.map(a => (
                       <button
                         key={a}
                         onClick={() => setRechargeAmount(String(a))}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
                           rechargeAmount === String(a)
-                            ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/20'
-                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                            ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/25 scale-[1.02]'
+                            : 'bg-white/[0.04] text-slate-300 border border-white/[0.06] hover:bg-white/[0.08] hover:border-white/[0.1]'
                         }`}
                       >
                         {a} USDT
@@ -308,36 +332,32 @@ export default function DashboardPage() {
 
                 {/* Custom Amount */}
                 <div>
-                  <label className="text-xs text-slate-500 mb-2 block">自定义金额</label>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        value={rechargeAmount}
-                        onChange={(e) => setRechargeAmount(e.target.value)}
-                        placeholder="输入 USDT 金额"
-                        className="w-full px-3 py-2.5 pr-16 rounded-lg bg-slate-800 border border-slate-700 text-sm focus:border-cyan-500 focus:outline-none"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">USDT</span>
-                    </div>
+                  <label className="text-[11px] font-medium text-slate-500 mb-2.5 block uppercase tracking-wider">自定义金额</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={rechargeAmount}
+                      onChange={(e) => setRechargeAmount(e.target.value)}
+                      placeholder="输入 USDT 金额"
+                      className="w-full px-4 py-3 pr-16 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 focus:outline-none transition-all"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">USDT</span>
                   </div>
                 </div>
 
                 {/* Preview */}
                 {rechargeAmount && Number(rechargeAmount) >= 1 && (
-                  <div className="p-3 rounded-xl bg-cyan-500/5 border border-cyan-500/10">
+                  <div className="p-4 rounded-xl bg-cyan-500/[0.05] border border-cyan-500/10">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-slate-400">充值金额</span>
-                      <span className="font-medium">{rechargeAmount} USDT</span>
+                      <span className="font-semibold text-white">{rechargeAmount} USDT</span>
                     </div>
-                    <div className="flex items-center justify-between text-sm mt-1">
-                      <span className="text-slate-400">可获得 Token</span>
-                      <span className="font-bold text-amber-400">{Math.floor(Number(rechargeAmount) * USDT_RATE)} Token</span>
-                    </div>
-                    <div className="flex items-center justify-center mt-1">
-                      <ArrowRightLeft className="w-3.5 h-3.5 text-slate-600" />
+                    <div className="h-px bg-white/[0.04] my-2.5" />
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-400">可获得</span>
+                      <span className="font-bold text-amber-400 text-base">{Math.floor(Number(rechargeAmount) * USDT_RATE)} Token</span>
                     </div>
                   </div>
                 )}
@@ -345,7 +365,7 @@ export default function DashboardPage() {
                 <button
                   onClick={handleCreateRecharge}
                   disabled={rechargeLoading || !rechargeAmount || Number(rechargeAmount) < 1}
-                  className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-lg shadow-cyan-500/10"
+                  className="w-full py-3.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all duration-200 shadow-lg shadow-cyan-500/15 hover:shadow-cyan-500/25"
                 >
                   {rechargeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
                   创建充值订单
@@ -353,18 +373,18 @@ export default function DashboardPage() {
               </div>
 
               {/* Recharge Flow Info */}
-              <div className="p-4 rounded-xl bg-slate-900/30 border border-slate-800/30 space-y-3">
-                <h4 className="text-xs font-semibold text-slate-400">充值流程</h4>
-                <div className="space-y-2">
+              <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.04] space-y-4">
+                <h4 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">充值流程</h4>
+                <div className="space-y-3">
                   {[
                     { step: '1', text: '选择充值金额，创建充值订单' },
                     { step: '2', text: '复制钱包地址，在链上转入 USDT (TRC20)' },
-                    { step: '3', text: '点击"我已支付"确认转账' },
-                    { step: '4', text: '点击"兑换Token"将 USDT 转为 Token' },
+                    { step: '3', text: '点击「我已支付」确认转账' },
+                    { step: '4', text: '点击「兑换 Token」将 USDT 转为 Token' },
                   ].map(({ step, text }) => (
                     <div key={step} className="flex items-start gap-3">
-                      <span className="w-5 h-5 rounded-full bg-cyan-600/20 text-cyan-400 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{step}</span>
-                      <span className="text-xs text-slate-400">{text}</span>
+                      <span className="w-6 h-6 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 text-cyan-400 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 border border-cyan-500/15">{step}</span>
+                      <span className="text-[12px] text-slate-400 leading-relaxed">{text}</span>
                     </div>
                   ))}
                 </div>
@@ -374,44 +394,46 @@ export default function DashboardPage() {
             {/* Right: Payment Details / Active Order */}
             <div className="space-y-6">
               {rechargeOrder ? (
-                <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800/50 space-y-5">
+                <div className="p-7 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-6">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-base font-semibold flex items-center gap-2">
-                      <QrCode className="w-5 h-5 text-amber-400" />
+                    <h3 className="text-[15px] font-bold flex items-center gap-2.5 tracking-tight">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                        <QrCode className="w-4 h-4 text-amber-400" />
+                      </div>
                       支付信息
                     </h3>
                     {statusBadge(rechargeOrder.status)}
                   </div>
 
                   {/* Amount */}
-                  <div className="text-center py-4">
-                    <div className="text-4xl font-bold text-white">{rechargeOrder.usdtAmount} <span className="text-lg text-slate-400">USDT</span></div>
-                    <div className="text-xs text-slate-500 mt-1">≈ {rechargeOrder.usdtAmount * USDT_RATE} Token</div>
+                  <div className="text-center py-5 rounded-xl bg-white/[0.02]">
+                    <div className="text-5xl font-extrabold text-white tracking-tight">{rechargeOrder.usdtAmount} <span className="text-xl text-slate-500 font-medium">USDT</span></div>
+                    <div className="text-xs text-slate-500 mt-2 font-medium">≈ {rechargeOrder.usdtAmount * USDT_RATE} Token</div>
                   </div>
 
                   {/* Wallet Address */}
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-500">收款钱包地址 ({rechargeOrder.network})</label>
+                  <div className="space-y-2.5">
+                    <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">收款钱包地址 ({rechargeOrder.network})</label>
                     <div className="flex items-center gap-2">
-                      <code className="flex-1 text-xs bg-slate-800 p-3 rounded-lg font-mono break-all text-cyan-300 border border-slate-700">{rechargeOrder.walletAddress}</code>
+                      <code className="flex-1 text-xs bg-white/[0.04] p-3.5 rounded-xl font-mono break-all text-cyan-300 border border-white/[0.06] leading-relaxed">{rechargeOrder.walletAddress}</code>
                       <button
                         onClick={() => handleCopy(rechargeOrder.walletAddress, 'wallet')}
-                        className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors shrink-0"
+                        className="p-3 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl transition-all border border-white/[0.06] shrink-0"
                       >
-                        {copied === 'wallet' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                        {copied === 'wallet' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-slate-400" />}
                       </button>
                     </div>
-                    {copied === 'wallet' && <p className="text-[10px] text-emerald-400">已复制到剪贴板</p>}
+                    {copied === 'wallet' && <p className="text-[11px] text-emerald-400 font-medium">已复制到剪贴板</p>}
                   </div>
 
                   {/* Network Warning */}
-                  <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/15 text-xs text-amber-400/80">
-                    <strong>注意:</strong> 请确保使用 <span className="font-bold text-amber-300">{rechargeOrder.network}</span> 网络转账，其他网络转账将无法到账！
+                  <div className="p-4 rounded-xl bg-amber-500/[0.05] border border-amber-500/15 text-xs text-amber-400/80 leading-relaxed">
+                    <strong className="text-amber-300">注意:</strong> 请确保使用 <span className="font-bold text-amber-300">{rechargeOrder.network}</span> 网络转账，其他网络转账将无法到账
                   </div>
 
                   {/* Order Info */}
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex justify-between"><span className="text-slate-500">订单号</span><span className="font-mono text-slate-300">#{rechargeOrder.id}</span></div>
+                  <div className="space-y-2 text-xs px-1">
+                    <div className="flex justify-between"><span className="text-slate-500">订单号</span><span className="font-mono text-slate-300 font-medium">#{rechargeOrder.id}</span></div>
                     <div className="flex justify-between"><span className="text-slate-500">有效期至</span><span className="text-slate-300">{new Date(rechargeOrder.expiresAt).toLocaleString('zh-CN')}</span></div>
                   </div>
 
@@ -420,7 +442,7 @@ export default function DashboardPage() {
                     <button
                       onClick={() => handleConfirmPayment(rechargeOrder.id)}
                       disabled={rechargeLoading}
-                      className="w-full py-3 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+                      className="w-full py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-40 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/15"
                     >
                       {rechargeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                       我已支付
@@ -431,7 +453,7 @@ export default function DashboardPage() {
                     <button
                       onClick={() => handleExchange(rechargeOrder.id)}
                       disabled={exchangeLoading === rechargeOrder.id}
-                      className="w-full py-3 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-50 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/10"
+                      className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-40 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/15"
                     >
                       {exchangeLoading === rechargeOrder.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRightLeft className="w-4 h-4" />}
                       兑换 {rechargeOrder.usdtAmount * USDT_RATE} Token
@@ -439,19 +461,22 @@ export default function DashboardPage() {
                   )}
                 </div>
               ) : (
-                <div className="p-8 rounded-2xl bg-slate-900/30 border border-dashed border-slate-800 flex flex-col items-center justify-center gap-3 text-center min-h-[300px]">
-                  <Wallet className="w-12 h-12 text-slate-700" />
-                  <p className="text-sm text-slate-500">在左侧选择金额创建充值订单后<br />这里将显示支付信息</p>
+                <div className="p-10 rounded-2xl bg-white/[0.015] border border-dashed border-white/[0.06] flex flex-col items-center justify-center gap-4 text-center min-h-[300px]">
+                  <div className="w-16 h-16 rounded-2xl bg-white/[0.03] flex items-center justify-center">
+                    <Wallet className="w-8 h-8 text-slate-700" />
+                  </div>
+                  <p className="text-sm text-slate-500 leading-relaxed">在左侧选择金额创建充值订单后<br />这里将显示支付信息</p>
                 </div>
               )}
 
-              {/* Exchange Rate Info */}
-              <div className="p-4 rounded-xl bg-slate-900/30 border border-slate-800/30">
-                <h4 className="text-xs font-semibold text-slate-400 mb-2">Token 用途</h4>
-                <div className="space-y-1.5 text-xs text-slate-500">
-                  <div className="flex justify-between"><span>基础扫描 (无搜索增强)</span><span className="text-slate-300">1 Token/次</span></div>
-                  <div className="flex justify-between"><span>搜索增强扫描</span><span className="text-slate-300">2 Token/次</span></div>
-                  <div className="flex justify-between"><span>扫描结果有效期</span><span className="text-slate-300">5 分钟</span></div>
+              {/* Token Usage Info */}
+              <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.04]">
+                <h4 className="text-[11px] font-semibold text-slate-400 mb-3 uppercase tracking-wider">Token 用途</h4>
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex justify-between items-center"><span className="text-slate-500">基础扫描 (无搜索增强)</span><span className="text-slate-300 font-semibold">1 Token/次</span></div>
+                  <div className="flex justify-between items-center"><span className="text-slate-500">搜索增强扫描</span><span className="text-slate-300 font-semibold">2 Token/次</span></div>
+                  <div className="h-px bg-white/[0.04]" />
+                  <div className="flex justify-between items-center"><span className="text-slate-500">扫描结果有效期</span><span className="text-slate-300 font-semibold">5 分钟</span></div>
                 </div>
               </div>
             </div>
@@ -462,29 +487,34 @@ export default function DashboardPage() {
         {tab === 'history' && (
           <div className="space-y-3">
             {recharges.length === 0 && (
-              <p className="text-center text-sm text-slate-600 py-12">暂无充值记录</p>
+              <div className="py-16 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-white/[0.03] flex items-center justify-center mx-auto mb-4">
+                  <History className="w-6 h-6 text-slate-700" />
+                </div>
+                <p className="text-sm text-slate-500">暂无充值记录</p>
+              </div>
             )}
             {recharges.map((r: any) => (
-              <div key={r.id} className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/50 flex items-center justify-between gap-4">
+              <div key={r.id} className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium">{r.amount} USDT</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">{r.method}</span>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <span className="text-sm font-bold text-white tabular-nums">{r.amount} USDT</span>
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-white/[0.04] text-slate-400 border border-white/[0.06]">{r.method}</span>
                     {statusBadge(r.status)}
                     {r.note?.includes('已兑换') && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">已兑换</span>
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/15">已兑换</span>
                     )}
                   </div>
-                  <div className="text-[10px] text-slate-600 mt-1">
+                  <div className="text-[11px] text-slate-600 mt-1.5">
                     {new Date(r.createdAt).toLocaleString('zh-CN')}
-                    {r.txRef && <span> · TX: {r.txRef}</span>}
+                    {r.txRef && <span className="text-slate-500"> · TX: {r.txRef}</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {r.status === 'PENDING' && (
                     <button
                       onClick={() => handleConfirmPayment(r.id)}
-                      className="px-3 py-1.5 text-xs bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 rounded-lg transition-colors"
+                      className="px-3.5 py-2 text-xs font-semibold bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 rounded-xl transition-all border border-amber-500/15"
                     >
                       确认到账
                     </button>
@@ -493,7 +523,7 @@ export default function DashboardPage() {
                     <button
                       onClick={() => handleExchange(r.id)}
                       disabled={exchangeLoading === r.id}
-                      className="px-3 py-1.5 text-xs bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 disabled:opacity-50 rounded-lg transition-colors flex items-center gap-1"
+                      className="px-3.5 py-2 text-xs font-semibold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 rounded-xl transition-all flex items-center gap-1.5 border border-emerald-500/15"
                     >
                       {exchangeLoading === r.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRightLeft className="w-3 h-3" />}
                       兑换Token
@@ -503,10 +533,10 @@ export default function DashboardPage() {
               </div>
             ))}
             {rechargeTotal > 1 && (
-              <div className="flex items-center justify-center gap-4 pt-4">
-                <button disabled={rechargePage <= 1} onClick={() => loadRecharges(rechargePage - 1)} className="p-1.5 text-slate-500 hover:text-white disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
-                <span className="text-xs text-slate-500">{rechargePage} / {rechargeTotal}</span>
-                <button disabled={rechargePage >= rechargeTotal} onClick={() => loadRecharges(rechargePage + 1)} className="p-1.5 text-slate-500 hover:text-white disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
+              <div className="flex items-center justify-center gap-4 pt-6">
+                <button disabled={rechargePage <= 1} onClick={() => loadRecharges(rechargePage - 1)} className="p-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.05] disabled:opacity-20 transition-all"><ChevronLeft className="w-4 h-4" /></button>
+                <span className="text-xs text-slate-500 tabular-nums font-medium">{rechargePage} / {rechargeTotal}</span>
+                <button disabled={rechargePage >= rechargeTotal} onClick={() => loadRecharges(rechargePage + 1)} className="p-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.05] disabled:opacity-20 transition-all"><ChevronRight className="w-4 h-4" /></button>
               </div>
             )}
           </div>
@@ -514,58 +544,70 @@ export default function DashboardPage() {
 
         {/* ==================== API 令牌 Tab ==================== */}
         {tab === 'tokens' && (
-          <div className="space-y-4">
-            <div className="flex gap-2">
+          <div className="space-y-5">
+            <div className="flex gap-3">
               <input
                 value={newTokenName}
                 onChange={(e) => setNewTokenName(e.target.value)}
                 placeholder="令牌名称 (可选)"
-                className="flex-1 px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-sm focus:border-cyan-500 focus:outline-none"
+                className="flex-1 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm placeholder-slate-600 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 focus:outline-none transition-all"
               />
               <button
                 onClick={handleCreateToken}
                 disabled={creating}
-                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors"
+                className="px-5 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-40 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-cyan-500/15"
               >
                 {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 创建令牌
               </button>
             </div>
             {createdToken && (
-              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-2">
-                <p className="text-sm text-emerald-400 font-medium">令牌已创建，请立即复制！此令牌仅显示一次。</p>
+              <div className="p-5 rounded-2xl bg-emerald-500/[0.06] border border-emerald-500/20 space-y-3">
+                <p className="text-sm text-emerald-300 font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  令牌已创建，请立即复制！此令牌仅显示一次。
+                </p>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 text-xs bg-slate-900 p-2 rounded font-mono break-all">{createdToken}</code>
-                  <button onClick={() => handleCopy(createdToken, 'token')} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors">
-                    <Copy className="w-4 h-4" />
+                  <code className="flex-1 text-xs bg-white/[0.04] p-3.5 rounded-xl font-mono break-all text-emerald-200 border border-white/[0.06] leading-relaxed">{createdToken}</code>
+                  <button onClick={() => handleCopy(createdToken, 'token')} className="p-3 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl transition-all border border-white/[0.06]">
+                    {copied === 'token' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-slate-400" />}
                   </button>
                 </div>
-                {copied === 'token' && <p className="text-xs text-emerald-400">已复制到剪贴板</p>}
+                {copied === 'token' && <p className="text-[11px] text-emerald-400 font-medium">已复制到剪贴板</p>}
               </div>
             )}
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {tokens.map((t) => (
-                <div key={t.id} className={`p-3 rounded-xl border ${t.isRevoked ? 'border-slate-800/30 bg-slate-900/20 opacity-50' : 'border-slate-800/50 bg-slate-900/50'} flex items-center justify-between`}>
+                <div key={t.id} className={`p-4 rounded-2xl border transition-all ${t.isRevoked ? 'border-white/[0.03] bg-white/[0.01] opacity-40' : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.1]'} flex items-center justify-between`}>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <code className="text-sm font-mono text-slate-300">{t.tokenPrefix}...</code>
-                      {t.name && <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded">{t.name}</span>}
-                      {t.isRevoked && <span className="text-xs text-red-400 bg-red-500/10 px-2 py-0.5 rounded">已吊销</span>}
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-white/[0.04] flex items-center justify-center">
+                        <Key className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                      <code className="text-sm font-mono text-slate-200 font-medium">{t.tokenPrefix}...</code>
+                      {t.name && <span className="text-[11px] text-slate-400 bg-white/[0.04] px-2.5 py-1 rounded-lg border border-white/[0.06]">{t.name}</span>}
+                      {t.isRevoked && <span className="text-[10px] font-medium text-red-400 bg-red-500/10 px-2.5 py-1 rounded-full border border-red-500/15">已吊销</span>}
                     </div>
-                    <div className="text-[10px] text-slate-600 mt-1">
+                    <div className="text-[11px] text-slate-600 mt-1.5 ml-[38px]">
                       创建于 {new Date(t.createdAt).toLocaleString('zh-CN')}
-                      {t.lastUsedAt && ` · 最后使用 ${new Date(t.lastUsedAt).toLocaleString('zh-CN')}`}
+                      {t.lastUsedAt && <span className="text-slate-500"> · 最后使用 {new Date(t.lastUsedAt).toLocaleString('zh-CN')}</span>}
                     </div>
                   </div>
                   {!t.isRevoked && (
-                    <button onClick={() => handleRevoke(t.id)} className="p-1.5 text-slate-500 hover:text-red-400 transition-colors">
+                    <button onClick={() => handleRevoke(t.id)} className="p-2 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
                 </div>
               ))}
               {tokens.length === 0 && (
-                <p className="text-center text-sm text-slate-600 py-8">还没有创建 API 令牌</p>
+                <div className="py-16 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-white/[0.03] flex items-center justify-center mx-auto mb-4">
+                    <Key className="w-6 h-6 text-slate-700" />
+                  </div>
+                  <p className="text-sm text-slate-500">还没有创建 API 令牌</p>
+                  <p className="text-xs text-slate-600 mt-1">创建令牌后即可在 AAGS 客户端中使用扫描服务</p>
+                </div>
               )}
             </div>
           </div>
@@ -573,29 +615,34 @@ export default function DashboardPage() {
 
         {/* ==================== Token 流水 Tab ==================== */}
         {tab === 'transactions' && (
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {transactions.map((t: any) => (
-              <div key={t.id} className="p-3 rounded-xl bg-slate-900/50 border border-slate-800/50 flex items-center justify-between">
+              <div key={t.id} className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all flex items-center justify-between">
                 <div>
-                  <div className="text-sm">{t.description || t.type}</div>
-                  <div className="text-[10px] text-slate-600">{new Date(t.createdAt).toLocaleString('zh-CN')}</div>
+                  <div className="text-[13px] font-medium text-slate-200">{t.description || t.type}</div>
+                  <div className="text-[11px] text-slate-600 mt-1">{new Date(t.createdAt).toLocaleString('zh-CN')}</div>
                 </div>
                 <div className="text-right">
-                  <div className={`text-sm font-medium ${t.amount > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <div className={`text-sm font-bold tabular-nums ${t.amount > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {t.amount > 0 ? '+' : ''}{t.amount}
                   </div>
-                  <div className="text-[10px] text-slate-600">余额 {t.balanceAfter}</div>
+                  <div className="text-[11px] text-slate-600 mt-0.5 tabular-nums">余额 {t.balanceAfter}</div>
                 </div>
               </div>
             ))}
             {transactions.length === 0 && (
-              <p className="text-center text-sm text-slate-600 py-8">暂无交易记录</p>
+              <div className="py-16 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-white/[0.03] flex items-center justify-center mx-auto mb-4">
+                  <FileText className="w-6 h-6 text-slate-700" />
+                </div>
+                <p className="text-sm text-slate-500">暂无交易记录</p>
+              </div>
             )}
             {txTotal > 1 && (
-              <div className="flex items-center justify-center gap-4 pt-4">
-                <button disabled={txPage <= 1} onClick={() => loadTransactions(txPage - 1)} className="p-1.5 text-slate-500 hover:text-white disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
-                <span className="text-xs text-slate-500">{txPage} / {txTotal}</span>
-                <button disabled={txPage >= txTotal} onClick={() => loadTransactions(txPage + 1)} className="p-1.5 text-slate-500 hover:text-white disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
+              <div className="flex items-center justify-center gap-4 pt-6">
+                <button disabled={txPage <= 1} onClick={() => loadTransactions(txPage - 1)} className="p-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.05] disabled:opacity-20 transition-all"><ChevronLeft className="w-4 h-4" /></button>
+                <span className="text-xs text-slate-500 tabular-nums font-medium">{txPage} / {txTotal}</span>
+                <button disabled={txPage >= txTotal} onClick={() => loadTransactions(txPage + 1)} className="p-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.05] disabled:opacity-20 transition-all"><ChevronRight className="w-4 h-4" /></button>
               </div>
             )}
           </div>
@@ -603,44 +650,53 @@ export default function DashboardPage() {
 
         {/* ==================== 扫描记录 Tab ==================== */}
         {tab === 'scans' && (
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {scans.map((s: any) => (
-              <div key={s.id} className="p-3 rounded-xl bg-slate-900/50 border border-slate-800/50 flex items-center justify-between gap-3">
+              <div key={s.id} className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     {s.isCached ? (
-                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">缓存推送</span>
+                      <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/15 shrink-0">缓存推送</span>
                     ) : (
-                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">真实调用</span>
+                      <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/15 shrink-0">实时扫描</span>
                     )}
-                    <code className="text-xs font-mono text-slate-400">{s.briefingId}</code>
-                    {s.enableSearch && <span className="text-[10px] text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">搜索增强</span>}
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${s.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : s.status === 'FAILED' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
-                      {s.status === 'COMPLETED' ? '完成' : s.status === 'FAILED' ? '失败' : s.status === 'PROCESSING' ? '处理中' : '排队中'}
+                    <code className="text-[11px] font-mono text-slate-500">{s.briefingId?.slice(0, 16)}...</code>
+                    {s.enableSearch && <span className="text-[10px] font-medium text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/15">搜索增强</span>}
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-lg ${
+                      s.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' :
+                      s.status === 'FAILED' ? 'bg-red-500/10 text-red-400 border border-red-500/15' :
+                      'bg-amber-500/10 text-amber-400 border border-amber-500/15'
+                    }`}>
+                      {s.status === 'COMPLETED' ? '✓ 完成' : s.status === 'FAILED' ? '✗ 失败' : s.status === 'PROCESSING' ? '处理中' : '排队中'}
                     </span>
                   </div>
-                  <div className="text-[10px] text-slate-600 mt-1">
+                  <div className="text-[11px] text-slate-600 mt-1.5">
                     {new Date(s.startedAt).toLocaleString('zh-CN')}
-                    {s.status === 'COMPLETED' && <span> · {s.signalCount} 信号 · {s.alertCount} 预警</span>}
-                    {s.status === 'FAILED' && s.errorMessage && <span className="text-red-400"> · {s.errorMessage}</span>}
+                    {s.status === 'COMPLETED' && (
+                      <span className="text-slate-500"> · <span className="text-cyan-500/70">{s.signalCount} 信号</span> · <span className="text-amber-500/70">{s.alertCount} 预警</span></span>
+                    )}
+                    {s.status === 'FAILED' && s.errorMessage && <span className="text-red-400/70"> · {s.errorMessage}</span>}
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-xs font-medium text-amber-400">-{s.tokenCost} Token</div>
-                  {s.realCostUsd !== undefined && s.realCostUsd > 0 && (
-                    <div className="text-[10px] text-slate-600 mt-0.5">消耗 ${Number(s.realCostUsd).toFixed(4)}</div>
-                  )}
+                  <div className="text-xs font-bold text-amber-400 tabular-nums">-{s.tokenCost} Token</div>
                 </div>
               </div>
             ))}
             {scans.length === 0 && (
-              <p className="text-center text-sm text-slate-600 py-8">暂无扫描记录</p>
+              <div className="py-16 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-white/[0.03] flex items-center justify-center mx-auto mb-4">
+                  <Zap className="w-6 h-6 text-slate-700" />
+                </div>
+                <p className="text-sm text-slate-500">暂无扫描记录</p>
+                <p className="text-xs text-slate-600 mt-1">使用 AAGS 客户端发起扫描后，记录会显示在这里</p>
+              </div>
             )}
             {scanTotal > 1 && (
-              <div className="flex items-center justify-center gap-4 pt-4">
-                <button disabled={scanPage <= 1} onClick={() => loadScans(scanPage - 1)} className="p-1.5 text-slate-500 hover:text-white disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
-                <span className="text-xs text-slate-500">{scanPage} / {scanTotal}</span>
-                <button disabled={scanPage >= scanTotal} onClick={() => loadScans(scanPage + 1)} className="p-1.5 text-slate-500 hover:text-white disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
+              <div className="flex items-center justify-center gap-4 pt-6">
+                <button disabled={scanPage <= 1} onClick={() => loadScans(scanPage - 1)} className="p-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.05] disabled:opacity-20 transition-all"><ChevronLeft className="w-4 h-4" /></button>
+                <span className="text-xs text-slate-500 tabular-nums font-medium">{scanPage} / {scanTotal}</span>
+                <button disabled={scanPage >= scanTotal} onClick={() => loadScans(scanPage + 1)} className="p-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.05] disabled:opacity-20 transition-all"><ChevronRight className="w-4 h-4" /></button>
               </div>
             )}
           </div>
