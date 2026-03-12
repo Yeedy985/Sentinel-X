@@ -274,16 +274,16 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="p-6 xl:p-8 space-y-8">
+    <div className="p-5 xl:p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3 text-white">
+          <h1 className="text-2xl font-bold flex items-center gap-3 text-white">
             <div className="w-10 h-10 rounded-xl bg-cyan-500/15 flex items-center justify-center">
               <Users className="w-5 h-5 text-cyan-400" />
             </div>
             用户管理
           </h1>
-          <p className="text-sm text-slate-500 mt-2 ml-[52px]">共 {total} 个注册用户 · 点击用户行展开详情和统计</p>
+          <p className="text-sm text-slate-400 mt-2 ml-[52px]">共 {total} 个注册用户 · 点击用户行展开详情和统计</p>
         </div>
       </div>
 
@@ -291,14 +291,14 @@ export default function UsersPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-slate-800/40 bg-white/[0.01]">
-              <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider w-12">ID</th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">邮箱</th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">昵称</th>
-              <th className="px-5 py-3.5 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Token</th>
-              <th className="px-5 py-3.5 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">扫描次数</th>
-              <th className="px-5 py-3.5 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">状态</th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">注册时间</th>
-              <th className="px-5 py-3.5 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">操作</th>
+              <th className="px-5 py-3.5 text-left text-sm font-semibold text-slate-400 uppercase tracking-wider w-12">ID</th>
+              <th className="px-5 py-3.5 text-left text-sm font-semibold text-slate-400 uppercase tracking-wider">邮箱</th>
+              <th className="px-5 py-3.5 text-left text-sm font-semibold text-slate-400 uppercase tracking-wider">昵称</th>
+              <th className="px-5 py-3.5 text-right text-sm font-semibold text-slate-400 uppercase tracking-wider">Token</th>
+              <th className="px-5 py-3.5 text-right text-sm font-semibold text-slate-400 uppercase tracking-wider">扫描次数</th>
+              <th className="px-5 py-3.5 text-center text-sm font-semibold text-slate-400 uppercase tracking-wider">状态</th>
+              <th className="px-5 py-3.5 text-left text-sm font-semibold text-slate-400 uppercase tracking-wider">注册时间</th>
+              <th className="px-5 py-3.5 text-right text-sm font-semibold text-slate-400 uppercase tracking-wider">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -308,22 +308,22 @@ export default function UsersPage() {
                   className={`border-b border-slate-800/20 hover:bg-white/[0.015] transition-colors cursor-pointer ${expandedUser === u.id ? 'bg-white/[0.02]' : ''}`}
                   onClick={() => toggleExpand(u.id)}
                 >
-                  <td className="px-5 py-4 text-slate-600 font-mono text-sm">{u.id}</td>
-                  <td className="px-5 py-4 text-sm text-slate-200">{u.email}</td>
-                  <td className="px-5 py-4 text-sm text-slate-400">{u.nickname || '-'}</td>
-                  <td className="px-5 py-4 text-right text-sm font-semibold text-amber-400">{u.tokenBalance}</td>
-                  <td className="px-5 py-4 text-right text-sm text-slate-500">{u.scanCount || 0}</td>
+                  <td className="px-5 py-4 text-slate-500 font-mono text-[15px]">{u.id}</td>
+                  <td className="px-5 py-4 text-[15px] text-slate-200">{u.email}</td>
+                  <td className="px-5 py-4 text-[15px] text-slate-400">{u.nickname || '-'}</td>
+                  <td className="px-5 py-4 text-right text-[15px] font-semibold text-amber-400">{u.tokenBalance}</td>
+                  <td className="px-5 py-4 text-right text-[15px] text-slate-500">{u.scanCount || 0}</td>
                   <td className="px-5 py-4 text-center">
-                    <span className={`text-xs font-medium px-2.5 py-1 rounded-md ${u.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                    <span className={`text-sm font-medium px-2.5 py-1 rounded-md ${u.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
                       {u.status === 'ACTIVE' ? '正常' : '已禁用'}
                     </span>
                   </td>
-                  <td className="px-5 py-4 text-slate-500 text-sm">{new Date(u.createdAt).toLocaleString('zh-CN')}</td>
+                  <td className="px-5 py-4 text-slate-500 text-[15px]">{new Date(u.createdAt).toLocaleString('zh-CN')}</td>
                   <td className="px-5 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={(e) => { e.stopPropagation(); adminApi.updateUserStatus(u.id, u.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE').then(() => loadUsers(page)); }}
-                        className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition-all ${u.status === 'ACTIVE' ? 'text-red-400 hover:bg-red-500/10' : 'text-emerald-400 hover:bg-emerald-500/10'}`}
+                        className={`text-sm px-2.5 py-1.5 rounded-lg font-medium transition-all ${u.status === 'ACTIVE' ? 'text-red-400 hover:bg-red-500/10' : 'text-emerald-400 hover:bg-emerald-500/10'}`}
                       >
                         {u.status === 'ACTIVE' ? <Ban className="w-3 h-3 inline mr-1" /> : <CheckCircle className="w-3 h-3 inline mr-1" />}
                         {u.status === 'ACTIVE' ? '禁用' : '启用'}
@@ -350,7 +350,7 @@ export default function UsersPage() {
           <button disabled={page <= 1} onClick={() => loadUsers(page - 1)} className="p-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/5 disabled:opacity-30 transition-all">
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="text-sm text-slate-500">{page} / {totalPages}</span>
+          <span className="text-[15px] text-slate-400">{page} / {totalPages}</span>
           <button disabled={page >= totalPages} onClick={() => loadUsers(page + 1)} className="p-2 rounded-lg text-slate-500 hover:text-white hover:bg-white/5 disabled:opacity-30 transition-all">
             <ChevronRight className="w-4 h-4" />
           </button>

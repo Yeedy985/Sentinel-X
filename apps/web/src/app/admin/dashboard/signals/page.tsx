@@ -153,11 +153,11 @@ export default function SignalsPage() {
   });
 
   return (
-    <div className="p-6 xl:p-8 space-y-6">
+    <div className="p-5 xl:p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3 text-white">
+          <h1 className="text-2xl font-bold flex items-center gap-3 text-white">
             <div className="w-10 h-10 rounded-xl bg-yellow-500/15 flex items-center justify-center">
               <Zap className="w-5 h-5 text-yellow-400" />
             </div>

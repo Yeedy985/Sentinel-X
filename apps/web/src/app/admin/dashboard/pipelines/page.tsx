@@ -341,10 +341,10 @@ export default function PipelinesPage() {
   const providerCfg = LLM_PROVIDERS[form.provider];
 
   return (
-    <div className="p-6 xl:p-8 space-y-8">
+    <div className="p-5 xl:p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold flex items-center gap-3 text-white">
+        <h1 className="text-2xl font-bold flex items-center gap-3 text-white">
           <div className="w-10 h-10 rounded-xl bg-purple-600/20 flex items-center justify-center">
             <Cpu className="w-5 h-5 text-purple-400" />
           </div>

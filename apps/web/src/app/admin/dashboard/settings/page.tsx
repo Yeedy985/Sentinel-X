@@ -237,15 +237,15 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-6 xl:p-8 space-y-10">
+    <div className="p-5 xl:p-6 space-y-8">
       <div>
-        <h1 className="text-3xl font-bold flex items-center gap-3 text-white">
+        <h1 className="text-2xl font-bold flex items-center gap-3 text-white">
           <div className="w-10 h-10 rounded-xl bg-slate-700/30 flex items-center justify-center">
             <Settings className="w-5 h-5 text-slate-400" />
           </div>
           系统设置
         </h1>
-        <p className="text-sm text-slate-500 mt-2 ml-[52px]">管理 Sentinel-X 的全局运行参数</p>
+        <p className="text-sm text-slate-400 mt-2 ml-[52px]">管理 Sentinel-X 的全局运行参数</p>
       </div>
 
       {/* 计费模式卡片 */}
@@ -262,13 +262,13 @@ export default function SettingsPage() {
               setSaving(null);
             }}
             disabled={saving === 'billing_mode'}
-            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-orange-400 px-2 py-1 rounded-lg hover:bg-white/5 transition-all"
+            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-orange-400 px-2.5 py-1 rounded-lg hover:bg-white/5 transition-all"
           >
-            {saving === 'billing_mode' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+            {saving === 'billing_mode' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
             保存
           </button>
         </div>
-        <p className="text-xs text-slate-500 mb-4">每次扫描均含搜索增强，选择按实际 LLM 消耗或固定数量扣费</p>
+        <p className="text-sm text-slate-500 mb-4">每次扫描均含搜索增强，选择按实际 LLM 消耗或固定数量扣费</p>
         <div className="flex flex-col gap-3">
           <label
             className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer border transition-all ${
@@ -284,8 +284,8 @@ export default function SettingsPage() {
               {(settings.billing_mode || 'actual') === 'actual' && <div className="w-2 h-2 rounded-full bg-cyan-400" />}
             </div>
             <div>
-              <span className="text-sm font-medium">按实际 Token 消耗扣费</span>
-              <p className="text-xs text-slate-500 mt-0.5">每次扣除实际 LLM 调用产生的 Token 数量，缓存命中时扣除产生该缓存的原始 Token 数</p>
+              <span className="text-[15px] font-medium">按实际 Token 消耗扣费</span>
+              <p className="text-sm text-slate-500 mt-0.5">每次扣除实际 LLM 调用产生的 Token 数量，缓存命中时扣除产生该缓存的原始 Token 数</p>
             </div>
           </label>
           <label
@@ -303,8 +303,8 @@ export default function SettingsPage() {
             </div>
             <div className="flex items-center gap-3 flex-1">
               <div>
-                <span className="text-sm font-medium">固定模式扣 Token</span>
-                <p className="text-xs text-slate-500 mt-0.5">每次扫描扣除固定数量的 Token</p>
+                <span className="text-[15px] font-medium">固定模式扣 Token</span>
+                <p className="text-sm text-slate-500 mt-0.5">每次扫描扣除固定数量的 Token</p>
               </div>
               {settings.billing_mode === 'fixed' && (
                 <input
@@ -330,14 +330,14 @@ export default function SettingsPage() {
                 <button
                   onClick={() => handleSave(key, settings[key])}
                   disabled={saving === key}
-                  className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-orange-400 px-2 py-1 rounded-lg hover:bg-white/5 transition-all"
+                  className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-orange-400 px-2.5 py-1 rounded-lg hover:bg-white/5 transition-all"
                 >
-                  {saving === key ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  {saving === key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                   保存
                 </button>
               )}
             </div>
-            <p className="text-xs text-slate-500 mb-3">{config.desc}</p>
+            <p className="text-sm text-slate-500 mb-3">{config.desc}</p>
             {config.type === 'boolean' ? (
               <button
                 onClick={() => {
