@@ -532,10 +532,10 @@ adminRoutes.get('/system-scans', async (c) => {
     }),
   ]);
 
-  // 批量查询关联的 SystemScanLog (管理员扫描有真实 LLM token 统计)
-  const adminBriefingIds = records.filter((r: any) => r.briefingId.startsWith('admin-')).map((r: any) => r.briefingId);
-  const sysLogs = adminBriefingIds.length > 0
-    ? await db.systemScanLog.findMany({ where: { briefingId: { in: adminBriefingIds } } })
+  // 批量查询关联的 SystemScanLog (管理员扫描 + 用户扫描都有)
+  const allBriefingIds = records.map((r: any) => r.briefingId);
+  const sysLogs = allBriefingIds.length > 0
+    ? await db.systemScanLog.findMany({ where: { briefingId: { in: allBriefingIds } } })
     : [];
   const sysLogMap = new Map(sysLogs.map(l => [l.briefingId, l]));
 

@@ -726,7 +726,11 @@ export default function PipelinesPage() {
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-md ${log.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400' : log.status === 'FAILED' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400'}`}>
                         {log.status}
                       </span>
-                      {log.enableSearch && <span className="text-xs bg-cyan-500/10 text-cyan-400 px-1.5 py-0.5 rounded">搜索增强</span>}
+                      {log.isCached
+                        ? <span className="text-xs bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded">缓存命中</span>
+                        : log.enableSearch
+                        ? <span className="text-xs bg-cyan-500/10 text-cyan-400 px-1.5 py-0.5 rounded">搜索增强</span>
+                        : <span className="text-xs bg-slate-500/10 text-slate-400 px-1.5 py-0.5 rounded">基础扫描</span>}
                     </div>
                     <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
                       <span>{log.analyzerProvider}/{log.analyzerModel}</span>
