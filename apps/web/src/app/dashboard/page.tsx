@@ -240,15 +240,27 @@ export default function DashboardPage() {
       </nav>
 
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
-        {/* ─── Global Message ─── */}
+        {/* ─── Global Message Modal ─── */}
         {message && (
-          <div className={`p-4 rounded-2xl text-sm flex items-center gap-3 backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300 ${
-            message.type === 'success'
-              ? 'bg-emerald-500/[0.08] border border-emerald-500/20 text-emerald-300'
-              : 'bg-red-500/[0.08] border border-red-500/20 text-red-300'
-          }`}>
-            {message.type === 'success' ? <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" /> : <XCircle className="w-5 h-5 shrink-0 text-red-400" />}
-            <span className="font-medium">{message.text}</span>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setMessage(null)}>
+            <div className={`mx-4 max-w-md w-full p-6 rounded-2xl shadow-2xl flex flex-col items-center gap-4 text-center animate-in zoom-in-95 duration-200 ${
+              message.type === 'success'
+                ? 'bg-[#0d1a1a] border border-emerald-500/30'
+                : 'bg-[#1a0d0d] border border-red-500/30'
+            }`} onClick={(e) => e.stopPropagation()}>
+              {message.type === 'success'
+                ? <CheckCircle2 className="w-12 h-12 text-emerald-400" />
+                : <XCircle className="w-12 h-12 text-red-400" />}
+              <p className={`text-sm font-semibold leading-relaxed ${
+                message.type === 'success' ? 'text-emerald-300' : 'text-red-300'
+              }`}>{message.text}</p>
+              <button
+                onClick={() => setMessage(null)}
+                className="mt-1 px-6 py-2 text-xs font-medium rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 border border-white/[0.08] transition-all"
+              >
+                知道了
+              </button>
+            </div>
           </div>
         )}
 
