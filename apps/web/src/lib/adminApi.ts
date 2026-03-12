@@ -151,7 +151,25 @@ function getMockResponse(path: string, options: RequestInit = {}): any {
     return Promise.resolve({ success: false, error: '邮箱或密码错误' });
   }
   if (path === '/api/admin/dashboard') return mockOk(mockDashboard);
-  if (path.startsWith('/api/admin/users') && method === 'GET') return mockOk(mockUsers);
+  // Mock: 用户详情 (must be before generic users list)
+  if (path.match(/\/api\/admin\/users\/\d+$/) && method === 'GET') {
+    const uid = Number(path.split('/').pop());
+    const u = mockUsers.data.find(x => x.id === uid) || mockUsers.data[0];
+    return mockOk({
+      user: { ...u, passwordHash: '$2b$10$mock_hash_value_here...', updatedAt: u.createdAt, apiTokens: [
+        { id: 1, tokenPrefix: 'stx_a1b2', name: 'Default', lastUsedAt: '2026-03-11T10:00:00Z', isRevoked: false, createdAt: u.createdAt },
+      ] },
+      stats: { totalScans: u.scanCount, completedScans: Math.round(u.scanCount * 0.9), failedScans: Math.round(u.scanCount * 0.05), cachedScans: Math.round(u.scanCount * 0.6), searchScans: Math.round(u.scanCount * 0.7), cacheHitRate: 0.6, totalTokenSpent: u.scanCount * 1.5, totalRevenueUsd: u.scanCount * 0.5, rechargeCount: 3, transactionCount: u.scanCount + 3 },
+      recentScans: [],
+      recentRecords: [
+        { id: 1, briefingId: 'brf-mock-001', status: 'COMPLETED', isCached: false, enableSearch: true, tokenCost: 2, signalCount: 12, alertCount: 2, errorMessage: null, startedAt: '2026-03-11T10:00:00Z', completedAt: '2026-03-11T10:00:38Z' },
+        { id: 2, briefingId: 'brf-mock-002', status: 'COMPLETED', isCached: true, enableSearch: true, tokenCost: 2, signalCount: 12, alertCount: 2, errorMessage: null, startedAt: '2026-03-10T20:00:00Z', completedAt: '2026-03-10T20:00:01Z' },
+        { id: 3, briefingId: 'brf-mock-003', status: 'FAILED', isCached: false, enableSearch: true, tokenCost: 2, signalCount: 0, alertCount: 0, errorMessage: 'Pipeline timeout', startedAt: '2026-03-10T18:00:00Z', completedAt: '2026-03-10T18:00:30Z' },
+      ],
+    });
+  }
+  if (path.match(/\/api\/admin\/users\/\d+$/) && method === 'PUT') return mockOk({ ok: true });
+  if ((path === '/api/admin/users' || path.startsWith('/api/admin/users?')) && method === 'GET') return mockOk(mockUsers);
   if (path.includes('/status') && method === 'PATCH') return mockOk({ ok: true });
   if (path === '/api/admin/settings' && method === 'GET') return mockOk(mockSettings);
   if (path.startsWith('/api/admin/settings/') && method === 'PUT') return mockOk({ ok: true });
@@ -191,6 +209,14 @@ function getMockResponse(path: string, options: RequestInit = {}): any {
   }
   if (path.startsWith('/api/admin/system-scans')) return mockOk(mockSystemScans);
   if (path.startsWith('/api/admin/call-logs')) return mockOk(mockCallLogs);
+
+  // Mock: 管理员 CRUD
+  if (path === '/api/admin/admins' && method === 'GET') return mockOk([
+    { id: 1, email: 'admin@sentinel.aags.app', name: 'Sentinel Admin', createdAt: '2026-01-01T00:00:00Z' },
+  ]);
+  if (path === '/api/admin/admins' && method === 'POST') return mockOk({ id: 99 });
+  if (path.match(/\/api\/admin\/admins\/\d+/) && method === 'PUT') return mockOk({ ok: true });
+  if (path.match(/\/api\/admin\/admins\/\d+/) && method === 'DELETE') return mockOk({ ok: true });
 
   return mockOk(null);
 }
@@ -266,4 +292,16 @@ export const adminApi = {
     request('/api/admin/trigger-scan', { method: 'POST', body: JSON.stringify({ enableSearch }) }),
   getScanStatus: (briefingId: string) =>
     request(`/api/admin/trigger-scan/${briefingId}`),
+  getUserDetail: (id: number) =>
+    request(`/api/admin/users/${id}`),
+  updateUser: (id: number, data: { email?: string; nickname?: string; password?: string; tokenBalance?: number; status?: string }) =>
+    request(`/api/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  getAdmins: () =>
+    request('/api/admin/admins'),
+  createAdmin: (data: { email: string; password: string; name?: string }) =>
+    request('/api/admin/admins', { method: 'POST', body: JSON.stringify(data) }),
+  updateAdmin: (id: number, data: { email?: string; password?: string; name?: string }) =>
+    request(`/api/admin/admins/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteAdmin: (id: number) =>
+    request(`/api/admin/admins/${id}`, { method: 'DELETE' }),
 };

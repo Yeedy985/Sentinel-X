@@ -96,6 +96,7 @@ export default function PipelinesPage() {
   const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scanFnRef = useRef<() => void>(() => {});
+  const scanningRef = useRef(false);
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push('/login'); return; }
@@ -212,6 +213,12 @@ export default function PipelinesPage() {
   };
 
   const handleTriggerScan = async (enableSearch = true) => {
+    // 防并发: 如果上一次扫描仍在进行中，跳过
+    if (scanningRef.current) {
+      console.log('[AutoScan] 跳过: 上一次扫描仍在进行中');
+      return;
+    }
+    scanningRef.current = true;
     setScanning(true);
     setScanResult(null);
     setScanError(null);
@@ -219,6 +226,7 @@ export default function PipelinesPage() {
     if (!res.success) {
       setScanError(res.error || '\u89e6\u53d1\u626b\u63cf\u5931\u8d25');
       setScanning(false);
+      scanningRef.current = false;
       return;
     }
     const briefingId = res.data?.briefingId;
@@ -231,6 +239,7 @@ export default function PipelinesPage() {
           clearInterval(poll);
           setScanResult(s);
           setScanning(false);
+          scanningRef.current = false;
           if (s.status === 'FAILED') setScanError(s.errorMessage || '\u626b\u63cf\u5931\u8d25');
           loadScanLogs(1);
         }
@@ -239,6 +248,7 @@ export default function PipelinesPage() {
     setTimeout(() => {
       clearInterval(poll);
       setScanning(false);
+      scanningRef.current = false;
       setScanError('\u626b\u63cf\u8d85\u65f6\uff0c\u8bf7\u68c0\u67e5 Worker \u65e5\u5fd7');
     }, 300000);
   };
@@ -257,20 +267,27 @@ export default function PipelinesPage() {
     const elapsed = Math.floor((Date.now() - startedAt) / 1000);
     const cycleElapsed = elapsed % totalSec;
     const remaining = totalSec - cycleElapsed;
+    // 从 DB 恢复时，计算已经错过了几个周期
+    const missedCycles = Math.floor(elapsed / totalSec);
 
     setAutoScanEnabled(true);
     setAutoScanCountdown(remaining);
-    setAutoScanCount(count);
+    setAutoScanCount(count + (triggerNow ? 0 : missedCycles));
 
     if (triggerNow) scanFnRef.current();
 
+    // 统一用一个 1 秒 countdown timer，到 0 时触发扫描并重置
     countdownTimerRef.current = setInterval(() => {
-      setAutoScanCountdown(prev => prev <= 1 ? totalSec : prev - 1);
+      setAutoScanCountdown(prev => {
+        if (prev <= 1) {
+          // 倒计时结束 → 触发扫描
+          setAutoScanCount(c => c + 1);
+          scanFnRef.current();
+          return totalSec;
+        }
+        return prev - 1;
+      });
     }, 1000);
-    scanTimerRef.current = setInterval(() => {
-      setAutoScanCount(prev => prev + 1);
-      scanFnRef.current();
-    }, totalSec * 1000);
   };
 
   const startAutoScan = async () => {

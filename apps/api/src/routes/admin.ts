@@ -212,6 +212,153 @@ adminRoutes.patch('/users/:id/balance', async (c) => {
   return c.json<ApiResponse>({ success: true, message: `余额已调整为 ${newBalance}` });
 });
 
+// ── 用户详情 + 调用统计 ──
+adminRoutes.get('/users/:id', async (c) => {
+  const userId = Number(c.req.param('id'));
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    include: {
+      apiTokens: { select: { id: true, tokenPrefix: true, name: true, lastUsedAt: true, isRevoked: true, createdAt: true } },
+      _count: { select: { scanRecords: true, rechargeRecords: true, tokenTransactions: true } },
+    },
+  });
+  if (!user) return c.json<ApiResponse>({ success: false, error: '用户不存在' }, 404);
+
+  // 调用统计
+  const totalScans = await db.scanRecord.count({ where: { userId } });
+  const completedScans = await db.scanRecord.count({ where: { userId, status: 'COMPLETED' } });
+  const failedScans = await db.scanRecord.count({ where: { userId, status: 'FAILED' } });
+  const cachedScans = await db.scanRecord.count({ where: { userId, isCached: true } });
+  const searchScans = await db.scanRecord.count({ where: { userId, enableSearch: true } });
+  const totalTokenSpent = await db.scanRecord.aggregate({ where: { userId }, _sum: { tokenCost: true } });
+  const totalRevenue = await db.scanRecord.aggregate({ where: { userId }, _sum: { revenueUsd: true } });
+
+  // 最近30天每日扫描
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000);
+  const recentScans = await db.scanRecord.findMany({
+    where: { userId, startedAt: { gte: thirtyDaysAgo } },
+    select: { status: true, isCached: true, startedAt: true },
+    orderBy: { startedAt: 'desc' },
+  });
+
+  // 最近10条扫描记录
+  const recentRecords = await db.scanRecord.findMany({
+    where: { userId },
+    orderBy: { startedAt: 'desc' },
+    take: 10,
+    select: {
+      id: true, briefingId: true, status: true, isCached: true, enableSearch: true,
+      tokenCost: true, signalCount: true, alertCount: true, errorMessage: true,
+      startedAt: true, completedAt: true,
+    },
+  });
+
+  return c.json<ApiResponse>({
+    success: true,
+    data: {
+      user: {
+        id: user.id,
+        email: user.email,
+        passwordHash: user.passwordHash,
+        nickname: user.nickname,
+        tokenBalance: Number(user.tokenBalance),
+        status: user.status,
+        createdAt: user.createdAt.toISOString(),
+        updatedAt: user.updatedAt.toISOString(),
+        apiTokens: user.apiTokens.map(t => ({
+          id: t.id, tokenPrefix: t.tokenPrefix, name: t.name,
+          lastUsedAt: t.lastUsedAt?.toISOString() || null,
+          isRevoked: t.isRevoked, createdAt: t.createdAt.toISOString(),
+        })),
+      },
+      stats: {
+        totalScans, completedScans, failedScans, cachedScans, searchScans,
+        cacheHitRate: totalScans > 0 ? cachedScans / totalScans : 0,
+        totalTokenSpent: totalTokenSpent._sum.tokenCost || 0,
+        totalRevenueUsd: Number(totalRevenue._sum.revenueUsd ?? 0),
+        rechargeCount: user._count.rechargeRecords,
+        transactionCount: user._count.tokenTransactions,
+      },
+      recentScans: recentScans.map(r => ({
+        status: r.status, isCached: r.isCached, startedAt: r.startedAt.toISOString(),
+      })),
+      recentRecords: recentRecords.map(r => ({
+        id: r.id, briefingId: r.briefingId, status: r.status, isCached: r.isCached,
+        enableSearch: r.enableSearch, tokenCost: r.tokenCost, signalCount: r.signalCount,
+        alertCount: r.alertCount, errorMessage: r.errorMessage,
+        startedAt: r.startedAt.toISOString(), completedAt: r.completedAt?.toISOString() || null,
+      })),
+    },
+  });
+});
+
+// ── 编辑用户 ──
+adminRoutes.put('/users/:id', async (c) => {
+  const userId = Number(c.req.param('id'));
+  const body = await c.req.json<{ email?: string; nickname?: string; password?: string; tokenBalance?: number; status?: string }>();
+  const data: any = {};
+  if (body.email !== undefined) data.email = body.email.toLowerCase().trim();
+  if (body.nickname !== undefined) data.nickname = body.nickname;
+  if (body.password) data.passwordHash = hashPassword(body.password);
+  if (body.tokenBalance !== undefined) data.tokenBalance = BigInt(body.tokenBalance);
+  if (body.status !== undefined) data.status = body.status;
+
+  await db.user.update({ where: { id: userId }, data });
+  return c.json<ApiResponse>({ success: true, message: '用户信息已更新' });
+});
+
+// ── 管理员列表 ──
+adminRoutes.get('/admins', async (c) => {
+  const admins = await db.admin.findMany({ orderBy: { id: 'asc' } });
+  return c.json<ApiResponse>({
+    success: true,
+    data: admins.map(a => ({
+      id: a.id, email: a.email, name: a.name, createdAt: a.createdAt.toISOString(),
+    })),
+  });
+});
+
+// ── 创建管理员 ──
+adminRoutes.post('/admins', async (c) => {
+  const body = await c.req.json<{ email: string; password: string; name?: string }>();
+  if (!body.email?.trim() || !body.password?.trim()) {
+    return c.json<ApiResponse>({ success: false, error: '邮箱和密码为必填项' }, 400);
+  }
+  const exists = await db.admin.findUnique({ where: { email: body.email.toLowerCase().trim() } });
+  if (exists) return c.json<ApiResponse>({ success: false, error: '该邮箱已存在' }, 409);
+
+  const admin = await db.admin.create({
+    data: {
+      email: body.email.toLowerCase().trim(),
+      passwordHash: hashPassword(body.password),
+      name: body.name || null,
+    },
+  });
+  return c.json<ApiResponse>({ success: true, data: { id: admin.id }, message: '管理员已创建' }, 201);
+});
+
+// ── 更新管理员 ──
+adminRoutes.put('/admins/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  const body = await c.req.json<{ email?: string; password?: string; name?: string }>();
+  const data: any = {};
+  if (body.email !== undefined) data.email = body.email.toLowerCase().trim();
+  if (body.password) data.passwordHash = hashPassword(body.password);
+  if (body.name !== undefined) data.name = body.name;
+
+  await db.admin.update({ where: { id }, data });
+  return c.json<ApiResponse>({ success: true, message: '管理员信息已更新' });
+});
+
+// ── 删除管理员 ──
+adminRoutes.delete('/admins/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  const count = await db.admin.count();
+  if (count <= 1) return c.json<ApiResponse>({ success: false, error: '至少保留一个管理员账号' }, 400);
+  await db.admin.delete({ where: { id } });
+  return c.json<ApiResponse>({ success: true, message: '管理员已删除' });
+});
+
 // ── 获取所有配置 ──
 adminRoutes.get('/settings', async (c) => {
   const settings = await db.adminSetting.findMany();
