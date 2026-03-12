@@ -232,6 +232,12 @@ userRoutes.post('/recharge', async (c) => {
     return c.json<ApiResponse>({ success: false, error: `最低充值 ${MIN_USDT_RECHARGE} USDT` }, 400);
   }
 
+  // 检查用户当前 PENDING 订单数量，最多3个
+  const pendingCount = await db.rechargeRecord.count({ where: { userId, status: 'PENDING' } });
+  if (pendingCount >= 3) {
+    return c.json<ApiResponse>({ success: false, error: '您当前有 3 笔支付订单正在处理中，请等待前面的订单完成后再发起新的订单' }, 429);
+  }
+
   // 先解锁过期地址
   await unlockExpiredPaymentAddresses();
 
