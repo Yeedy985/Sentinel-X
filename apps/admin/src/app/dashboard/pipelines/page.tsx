@@ -66,6 +66,12 @@ const ROLE_OPTIONS = [
 const inputCls = 'w-full px-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 text-[15px] text-white placeholder-slate-500 focus:border-purple-500/70 focus:ring-1 focus:ring-purple-500/20 focus:outline-none transition-all';
 
 const AUTO_SCAN_KEY = 'admin-auto-scan';
+function _getSaved(): { running: boolean; intervalMins: number; startedAt: number; count: number } | null {
+  try {
+    const raw = typeof window !== 'undefined' ? sessionStorage.getItem(AUTO_SCAN_KEY) : null;
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
 
 function emptyForm() {
   return { role: 'ANALYZER', provider: 'deepseek', model: 'deepseek-chat', apiUrl: 'https://api.deepseek.com/v1/chat/completions', apiKey: '', priority: 0, enabled: true };
@@ -90,7 +96,7 @@ export default function PipelinesPage() {
   const [expandedLog, setExpandedLog] = useState<number | null>(null);
   const [formCollapsed, setFormCollapsed] = useState(true);
   const [listCollapsed, setListCollapsed] = useState(true);
-  const [autoScanEnabled, setAutoScanEnabled] = useState(false);
+  const [autoScanEnabled, setAutoScanEnabled] = useState(() => !!_getSaved()?.running);
   const [autoScanInterval, setAutoScanInterval] = useState(0);
   const [autoScanCountdown, setAutoScanCountdown] = useState(0);
   const [autoScanCount, setAutoScanCount] = useState(0);
@@ -285,18 +291,17 @@ export default function PipelinesPage() {
     try { sessionStorage.removeItem(AUTO_SCAN_KEY); } catch {}
   };
 
-  // 挂载时: 从 sessionStorage 恢复自动扫描
+  // 挂载时: 从 sessionStorage 恢复自动扫描定时器
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(AUTO_SCAN_KEY);
-      if (raw) {
-        const saved = JSON.parse(raw);
-        if (saved?.running && saved.intervalMins > 0) {
-          _boot(saved.intervalMins, saved.startedAt, saved.count, false);
-        }
-      }
-    } catch {}
-    return () => { clearTimers(); };
+    const saved = _getSaved();
+    if (saved?.running && saved.intervalMins > 0) {
+      _boot(saved.intervalMins, saved.startedAt, saved.count, false);
+    }
+    return () => {
+      // 仅清理 interval，不改 sessionStorage，下次挂载会恢复
+      if (scanTimerRef.current) clearInterval(scanTimerRef.current);
+      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatCountdown = (seconds: number) => {
