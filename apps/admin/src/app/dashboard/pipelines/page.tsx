@@ -65,14 +65,6 @@ const ROLE_OPTIONS = [
 
 const inputCls = 'w-full px-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 text-[15px] text-white placeholder-slate-500 focus:border-purple-500/70 focus:ring-1 focus:ring-purple-500/20 focus:outline-none transition-all';
 
-const AUTO_SCAN_KEY = 'admin-auto-scan';
-function _getSaved(): { running: boolean; intervalMins: number; startedAt: number; count: number } | null {
-  try {
-    const raw = typeof window !== 'undefined' ? sessionStorage.getItem(AUTO_SCAN_KEY) : null;
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-
 function emptyForm() {
   return { role: 'ANALYZER', provider: 'deepseek', model: 'deepseek-chat', apiUrl: 'https://api.deepseek.com/v1/chat/completions', apiKey: '', priority: 0, enabled: true };
 }
@@ -96,10 +88,11 @@ export default function PipelinesPage() {
   const [expandedLog, setExpandedLog] = useState<number | null>(null);
   const [formCollapsed, setFormCollapsed] = useState(true);
   const [listCollapsed, setListCollapsed] = useState(true);
-  const [autoScanEnabled, setAutoScanEnabled] = useState(() => !!_getSaved()?.running);
+  const [autoScanEnabled, setAutoScanEnabled] = useState(false);
   const [autoScanInterval, setAutoScanInterval] = useState(0);
   const [autoScanCountdown, setAutoScanCountdown] = useState(0);
   const [autoScanCount, setAutoScanCount] = useState(0);
+  const [autoScanStartedAt, setAutoScanStartedAt] = useState(0);
   const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scanFnRef = useRef<() => void>(() => {});
@@ -116,6 +109,14 @@ export default function PipelinesPage() {
     if (res.success && res.data) {
       const mins = Number(res.data.auto_scan_interval_minutes) || 0;
       setAutoScanInterval(mins);
+      // 从 DB 恢复自动扫描状态
+      const running = !!res.data.auto_scan_running;
+      const startedAt = Number(res.data.auto_scan_started_at) || 0;
+      if (running && mins > 0 && startedAt > 0) {
+        setAutoScanStartedAt(startedAt);
+        // 延迟到 scanFnRef 可用后再 boot
+        setTimeout(() => _boot(mins, startedAt, 0, false), 0);
+      }
     }
   };
 
@@ -268,41 +269,42 @@ export default function PipelinesPage() {
       setAutoScanCountdown(prev => prev <= 1 ? totalSec : prev - 1);
     }, 1000);
     scanTimerRef.current = setInterval(() => {
-      setAutoScanCount(prev => {
-        const next = prev + 1;
-        try { sessionStorage.setItem(AUTO_SCAN_KEY, JSON.stringify({ running: true, intervalMins: mins, startedAt, count: next })); } catch {}
-        return next;
-      });
+      setAutoScanCount(prev => prev + 1);
       scanFnRef.current();
     }, totalSec * 1000);
   };
 
-  const startAutoScan = () => {
+  const startAutoScan = async () => {
     if (autoScanInterval <= 0) return;
     const now = Date.now();
-    try { sessionStorage.setItem(AUTO_SCAN_KEY, JSON.stringify({ running: true, intervalMins: autoScanInterval, startedAt: now, count: 1 })); } catch {}
+    // 写入 DB 持久化
+    await Promise.all([
+      adminApi.updateSetting('auto_scan_running', true),
+      adminApi.updateSetting('auto_scan_started_at', now),
+    ]);
+    setAutoScanStartedAt(now);
     _boot(autoScanInterval, now, 1, true);
   };
 
-  const stopAutoScan = () => {
+  const stopAutoScan = async () => {
     clearTimers();
     setAutoScanEnabled(false);
     setAutoScanCountdown(0);
-    try { sessionStorage.removeItem(AUTO_SCAN_KEY); } catch {}
+    setAutoScanStartedAt(0);
+    // 清除 DB 持久化
+    await Promise.all([
+      adminApi.updateSetting('auto_scan_running', false),
+      adminApi.updateSetting('auto_scan_started_at', 0),
+    ]);
   };
 
-  // 挂载时: 从 sessionStorage 恢复自动扫描定时器
+  // 组件卸载时仅清理 interval，不改 DB，下次挂载从 DB 恢复
   useEffect(() => {
-    const saved = _getSaved();
-    if (saved?.running && saved.intervalMins > 0) {
-      _boot(saved.intervalMins, saved.startedAt, saved.count, false);
-    }
     return () => {
-      // 仅清理 interval，不改 sessionStorage，下次挂载会恢复
       if (scanTimerRef.current) clearInterval(scanTimerRef.current);
       if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const formatCountdown = (seconds: number) => {
     const m = Math.floor(seconds / 60);
