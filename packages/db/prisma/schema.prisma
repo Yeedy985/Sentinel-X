@@ -1,0 +1,271 @@
+// ==================== Sentinel-X 公共服务数据库 ====================
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== 用户 ====================
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique @db.VarChar(255)
+  passwordHash  String    @map("password_hash") @db.VarChar(255)
+  nickname      String?   @db.VarChar(100)
+  tokenBalance  BigInt    @default(0) @map("token_balance")
+  status        UserStatus @default(ACTIVE)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  apiTokens          ApiToken[]
+  rechargeRecords    RechargeRecord[]
+  scanRecords        ScanRecord[]
+  tokenTransactions  TokenTransaction[]
+
+  @@map("users")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+// ==================== API 认证令牌 ====================
+model ApiToken {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @map("user_id")
+  tokenHash   String    @map("token_hash") @db.VarChar(255)
+  tokenPrefix String    @map("token_prefix") @db.VarChar(12)
+  name        String?   @db.VarChar(100)
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
+  isRevoked   Boolean   @default(false) @map("is_revoked")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scanRecords ScanRecord[]
+
+  @@index([tokenHash])
+  @@map("api_tokens")
+}
+
+// ==================== 充值记录 ====================
+model RechargeRecord {
+  id        Int             @id @default(autoincrement())
+  userId    Int             @map("user_id")
+  amount    BigInt
+  method    RechargeMethod  @default(MANUAL)
+  txRef     String?         @map("tx_ref") @db.VarChar(255)
+  status    RechargeStatus  @default(COMPLETED)
+  note      String?
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  user      User            @relation(fields: [userId], references: [id])
+
+  @@map("recharge_records")
+}
+
+enum RechargeMethod {
+  MANUAL
+  USDT
+  ALIPAY
+  WECHAT
+}
+
+enum RechargeStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+// ==================== 扫描调用记录 ====================
+model ScanRecord {
+  id            Int          @id @default(autoincrement())
+  userId        Int          @map("user_id")
+  apiTokenId    Int?         @map("api_token_id")
+  briefingId    String       @unique @map("briefing_id") @db.VarChar(100)
+  tokenCost     Int          @map("token_cost")
+  status        ScanStatus   @default(PENDING)
+  isCached      Boolean      @default(false) @map("is_cached")
+  cacheId       Int?         @map("cache_id")
+  signalCount   Int          @default(0) @map("signal_count")
+  alertCount    Int          @default(0) @map("alert_count")
+  pipelineInfo  Json?        @map("pipeline_info")
+  enableSearch  Boolean      @default(true) @map("enable_search")
+  realCostUsd   Decimal      @default(0) @map("real_cost_usd") @db.Decimal(10, 6)
+  revenueUsd    Decimal      @default(0) @map("revenue_usd") @db.Decimal(10, 6)
+  profitUsd     Decimal      @default(0) @map("profit_usd") @db.Decimal(10, 6)
+  briefingData  Json?        @map("briefing_data")
+  errorMessage  String?      @map("error_message")
+  startedAt     DateTime     @default(now()) @map("started_at") @db.Timestamptz
+  completedAt   DateTime?    @map("completed_at") @db.Timestamptz
+
+  user          User         @relation(fields: [userId], references: [id])
+  apiToken      ApiToken?    @relation(fields: [apiTokenId], references: [id])
+  cache         ScanCache?   @relation(fields: [cacheId], references: [id])
+
+  @@index([userId, startedAt(sort: Desc)])
+  @@map("scan_records")
+}
+
+enum ScanStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ==================== Token 流水 ====================
+model TokenTransaction {
+  id            Int                    @id @default(autoincrement())
+  userId        Int                    @map("user_id")
+  type          TokenTransactionType
+  amount        BigInt
+  balanceAfter  BigInt                 @map("balance_after")
+  refId         String?                @map("ref_id") @db.VarChar(100)
+  description   String?
+  createdAt     DateTime               @default(now()) @map("created_at") @db.Timestamptz
+
+  user          User                   @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("token_transactions")
+}
+
+enum TokenTransactionType {
+  RECHARGE
+  SCAN_DEDUCT
+  SCAN_REFUND
+  ADMIN_ADJUST
+}
+
+// ==================== 扫描缓存 ====================
+model ScanCache {
+  id            Int       @id @default(autoincrement())
+  cacheKey      String    @map("cache_key") @db.VarChar(100)
+  briefingData  Json      @map("briefing_data")
+  realCostUsd   Decimal   @map("real_cost_usd") @db.Decimal(10, 6)
+  searcherUsed  Boolean   @default(false) @map("searcher_used")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz
+
+  scanRecords   ScanRecord[]
+
+  @@index([cacheKey, expiresAt])
+  @@map("scan_cache")
+}
+
+// ==================== 系统自动扫描记录 (管理后台定时扫描) ====================
+model SystemScanLog {
+  id              Int              @id @default(autoincrement())
+  briefingId      String           @unique @map("briefing_id") @db.VarChar(100)
+  status          ScanStatus       @default(PENDING)
+  enableSearch    Boolean          @default(true) @map("enable_search")
+  signalCount     Int              @default(0) @map("signal_count")
+  alertCount      Int              @default(0) @map("alert_count")
+  tokenCostSearch Int              @default(0) @map("token_cost_search")   // 搜索LLM消耗的token
+  tokenCostAnalyze Int             @default(0) @map("token_cost_analyze")  // 分析LLM消耗的token
+  tokenCostTotal  Int              @default(0) @map("token_cost_total")    // 总token消耗
+  realCostUsd     Decimal          @default(0) @map("real_cost_usd") @db.Decimal(10, 6)
+  searcherProvider String?         @map("searcher_provider") @db.VarChar(50)
+  searcherModel    String?         @map("searcher_model") @db.VarChar(100)
+  analyzerProvider String?         @map("analyzer_provider") @db.VarChar(50)
+  analyzerModel    String?         @map("analyzer_model") @db.VarChar(100)
+  briefingData    Json?            @map("briefing_data")
+  errorMessage    String?          @map("error_message")
+  startedAt       DateTime         @default(now()) @map("started_at") @db.Timestamptz
+  completedAt     DateTime?        @map("completed_at") @db.Timestamptz
+
+  @@index([startedAt(sort: Desc)])
+  @@map("system_scan_logs")
+}
+
+// ==================== LLM 管线配置 (管理后台配置) ====================
+model PipelineConfig {
+  id          Int       @id @default(autoincrement())
+  role        PipelineRole
+  provider    String    @db.VarChar(50)
+  model       String    @db.VarChar(100)
+  apiUrl      String    @map("api_url") @db.VarChar(500)
+  apiKeyEnc   String    @map("api_key_enc")
+  enabled     Boolean   @default(true)
+  priority    Int       @default(0)
+  extraParams Json?     @map("extra_params")
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("pipeline_configs")
+}
+
+enum PipelineRole {
+  SEARCHER
+  ANALYZER
+  ANALYZER_BACKUP
+}
+
+// ==================== Prompt 模板 ====================
+model PromptTemplate {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique @db.VarChar(100)
+  content   String
+  version   Int       @default(1)
+  isActive  Boolean   @default(true) @map("is_active")
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("prompt_templates")
+}
+
+// ==================== 300信号矩阵 (逐条管理) ====================
+model SignalDefinition {
+  id               Int       @id @default(autoincrement())
+  signalId         Int       @unique @map("signal_id")
+  group            String    @db.VarChar(10)         // G1-G10
+  name             String    @db.VarChar(200)
+  impact           Int       @default(0)             // 默认权重 (正=利多, 负=利空)
+  halfLife         Int       @default(720) @map("half_life")  // 半衰期(分钟)
+  confidence       Float     @default(0.8)           // 默认置信度 0-1
+  category         String    @default("D") @db.VarChar(5)     // D=方向, V=波动, R=风险
+  triggerCondition String    @map("trigger_condition") @db.VarChar(500)
+  positiveDesc     String    @map("positive_desc") @db.VarChar(500)
+  negativeDesc     String    @map("negative_desc") @db.VarChar(500)
+  enabled          Boolean   @default(true)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([group])
+  @@index([enabled])
+  @@map("signal_definitions")
+}
+
+// ==================== 管理配置 (KV 存储) ====================
+model AdminSetting {
+  key       String    @id @db.VarChar(100)
+  value     Json
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("admin_settings")
+}
+
+// ==================== LLM 成本配置 ====================
+model LlmCostConfig {
+  id          Int       @id @default(autoincrement())
+  provider    String    @db.VarChar(50)
+  role        PipelineRole
+  model       String    @db.VarChar(100)
+  costPerCall Decimal   @map("cost_per_call") @db.Decimal(10, 6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([provider, role, model])
+  @@map("llm_cost_configs")
+}
+
+// ==================== 管理员账号 ====================
+model Admin {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique @db.VarChar(255)
+  passwordHash  String    @map("password_hash") @db.VarChar(255)
+  name          String?   @db.VarChar(100)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("admins")
+}

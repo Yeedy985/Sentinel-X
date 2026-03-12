@@ -1,0 +1,286 @@
+/**
+ * Scan Routes — 扫描请求 / 简报获取 / SSE流 / 状态检查
+ * POST /api/scan/request    — 请求一次扫描 (Token预扣)
+ * GET  /api/scan/briefings  — 获取简报列表
+ * GET  /api/scan/stream     — SSE 实时推送
+ * GET  /api/scan/status     — 服务状态 + Token余额
+ */
+import { Hono } from 'hono';
+import { streamSSE } from 'hono/streaming';
+import { db } from '@sentinel/db';
+import { requireApiToken } from '../middleware/auth';
+import { SERVICE_VERSION } from '@sentinel/shared';
+import type { ApiResponse, ScanResponse, ScanStatusResponse, BriefingResponse } from '@sentinel/shared';
+import * as crypto from 'node:crypto';
+import { scanQueue } from '../worker/scanWorker';
+
+export const scanRoutes = new Hono();
+scanRoutes.use('*', requireApiToken);
+
+// ── 获取管理配置 ──
+async function getSetting<T>(key: string, fallback: T): Promise<T> {
+  const s = await db.adminSetting.findUnique({ where: { key } });
+  return s ? (s.value as T) : fallback;
+}
+
+// ── POST /request — 请求扫描 ──
+scanRoutes.post('/request', async (c) => {
+  const userId = c.get('userId');
+  const body = await c.req.json<{ enableSearch?: boolean }>().catch(() => ({}));
+  const enableSearch = (body as any)?.enableSearch !== false;
+
+  // 检查维护模式
+  const maintenance = await getSetting('maintenance_mode', false);
+  if (maintenance) {
+    return c.json<ApiResponse>({ success: false, error: '服务正在维护中，请稍后再试' }, 503);
+  }
+
+  // 频率限制
+  const maxPerHour = await getSetting('max_scans_per_user_per_hour', 3);
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const recentCount = await db.scanRecord.count({
+    where: { userId, startedAt: { gte: oneHourAgo } },
+  });
+  if (recentCount >= maxPerHour) {
+    return c.json<ApiResponse>({ success: false, error: `每小时最多请求 ${maxPerHour} 次扫描` }, 429);
+  }
+
+  // 计算费用
+  const basicPrice = await getSetting('scan_price_basic', 1);
+  const searchPrice = await getSetting('scan_price_with_search', 2);
+  const tokenCost = enableSearch ? searchPrice : basicPrice;
+
+  // 检查余额
+  const user = await db.user.findUnique({ where: { id: userId } });
+  if (!user || Number(user.tokenBalance) < tokenCost) {
+    return c.json<ApiResponse>({
+      success: false,
+      error: `Token 余额不足，需要 ${tokenCost} Token，当前余额 ${Number(user?.tokenBalance ?? 0)}`,
+    }, 402);
+  }
+
+  // 检查缓存
+  const cacheWindow = await getSetting('cache_window_minutes', 5);
+  const cacheKey = enableSearch ? 'scan_with_search' : 'scan_basic';
+  const cacheExpiry = new Date(Date.now() - cacheWindow * 60 * 1000);
+  const cached = await db.scanCache.findFirst({
+    where: {
+      cacheKey,
+      searcherUsed: enableSearch,
+      expiresAt: { gt: new Date() },
+      createdAt: { gte: cacheExpiry },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const briefingId = `brf_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+
+  // Token 预扣 (事务)
+  const newBalance = Number(user.tokenBalance) - tokenCost;
+  await db.$transaction([
+    db.user.update({
+      where: { id: userId },
+      data: { tokenBalance: BigInt(newBalance) },
+    }),
+    db.tokenTransaction.create({
+      data: {
+        userId,
+        type: 'SCAN_DEDUCT',
+        amount: BigInt(-tokenCost),
+        balanceAfter: BigInt(newBalance),
+        refId: briefingId,
+        description: `扫描扣费${enableSearch ? ' (含搜索增强)' : ''}`,
+      },
+    }),
+  ]);
+
+  if (cached) {
+    // 命中缓存: 直接返回缓存结果，不消耗真实 LLM 成本
+    const briefingData = cached.briefingData as any;
+    await db.scanRecord.create({
+      data: {
+        userId,
+        briefingId,
+        tokenCost,
+        status: 'COMPLETED',
+        isCached: true,
+        cacheId: cached.id,
+        signalCount: briefingData?.triggeredSignals?.length ?? 0,
+        alertCount: briefingData?.alerts?.length ?? 0,
+        enableSearch,
+        realCostUsd: 0,
+        revenueUsd: tokenCost * 0.5,
+        profitUsd: tokenCost * 0.5,
+        briefingData: cached.briefingData,
+        startedAt: new Date(),
+        completedAt: new Date(),
+      },
+    });
+
+    return c.json<ApiResponse<ScanResponse>>({
+      success: true,
+      data: {
+        briefingId,
+        estimatedSeconds: 0,
+        tokenCost,
+        cached: true,
+      },
+    });
+  }
+
+  // 无缓存: 创建待处理扫描记录，交由 Worker 处理
+  await db.scanRecord.create({
+    data: {
+      userId,
+      briefingId,
+      tokenCost,
+      status: 'PENDING',
+      isCached: false,
+      enableSearch,
+      startedAt: new Date(),
+    },
+  });
+
+  // 将扫描任务推入 BullMQ 队列
+  await scanQueue.add('scan', { briefingId, enableSearch, userId });
+
+  return c.json<ApiResponse<ScanResponse>>({
+    success: true,
+    data: {
+      briefingId,
+      estimatedSeconds: enableSearch ? 30 : 15,
+      tokenCost,
+      cached: false,
+    },
+  });
+});
+
+// ── GET /briefings — 获取简报列表 ──
+scanRoutes.get('/briefings', async (c) => {
+  const userId = c.get('userId');
+  const limit = Math.min(20, Math.max(1, Number(c.req.query('limit')) || 10));
+  const after = c.req.query('after'); // briefingId, 用于增量拉取
+
+  const where: any = { userId, status: 'COMPLETED' };
+  if (after) {
+    const ref = await db.scanRecord.findFirst({ where: { briefingId: after } });
+    if (ref) {
+      where.completedAt = { gt: ref.completedAt };
+    }
+  }
+
+  const records = await db.scanRecord.findMany({
+    where,
+    orderBy: { completedAt: 'desc' },
+    take: limit,
+  });
+
+  const briefings: BriefingResponse[] = records
+    .filter((r) => r.briefingData)
+    .map((r) => {
+      const d = r.briefingData as any;
+      return {
+        briefingId: r.briefingId,
+        timestamp: r.completedAt?.getTime() ?? r.startedAt.getTime(),
+        marketSummary: d.marketSummary || '',
+        triggeredSignals: d.triggeredSignals || [],
+        alerts: d.alerts || [],
+        pipelineInfo: d.pipelineInfo || {
+          hasSearcher: r.enableSearch,
+          hasMarketData: false,
+          analyzerProvider: 'unknown',
+        },
+      };
+    });
+
+  return c.json<ApiResponse<BriefingResponse[]>>({ success: true, data: briefings });
+});
+
+// ── GET /stream — SSE 实时推送 ──
+scanRoutes.get('/stream', (c) => {
+  const userId = c.get('userId');
+
+  return streamSSE(c, async (stream) => {
+    // 心跳
+    const heartbeat = setInterval(async () => {
+      try {
+        await stream.writeSSE({ event: 'heartbeat', data: JSON.stringify({ t: Date.now() }) });
+      } catch {
+        clearInterval(heartbeat);
+      }
+    }, 15000);
+
+    // 初始事件
+    await stream.writeSSE({
+      event: 'connected',
+      data: JSON.stringify({ userId, version: SERVICE_VERSION }),
+    });
+
+    // 轮询检查新完成的简报 (生产环境应使用 Redis Pub/Sub)
+    let lastCheck = Date.now();
+    const pollInterval = setInterval(async () => {
+      try {
+        const newRecords = await db.scanRecord.findMany({
+          where: {
+            userId,
+            status: 'COMPLETED',
+            completedAt: { gt: new Date(lastCheck) },
+          },
+          orderBy: { completedAt: 'asc' },
+        });
+
+        for (const record of newRecords) {
+          if (record.briefingData) {
+            const d = record.briefingData as any;
+            await stream.writeSSE({
+              event: 'briefing',
+              data: JSON.stringify({
+                briefingId: record.briefingId,
+                timestamp: record.completedAt?.getTime() ?? Date.now(),
+                marketSummary: d.marketSummary || '',
+                triggeredSignals: d.triggeredSignals || [],
+                alerts: d.alerts || [],
+                pipelineInfo: d.pipelineInfo || {
+                  hasSearcher: record.enableSearch,
+                  hasMarketData: false,
+                  analyzerProvider: 'unknown',
+                },
+              }),
+            });
+          }
+        }
+        lastCheck = Date.now();
+      } catch {
+        // 忽略轮询错误
+      }
+    }, 3000);
+
+    // 连接断开清理
+    stream.onAbort(() => {
+      clearInterval(heartbeat);
+      clearInterval(pollInterval);
+    });
+
+    // 保持连接
+    while (true) {
+      await new Promise((r) => setTimeout(r, 30000));
+    }
+  });
+});
+
+// ── GET /status — 服务状态 ──
+scanRoutes.get('/status', async (c) => {
+  const userId = c.get('userId');
+  const user = await db.user.findUnique({ where: { id: userId } });
+  const maintenance = await getSetting('maintenance_mode', false);
+
+  return c.json<ApiResponse<ScanStatusResponse>>({
+    success: true,
+    data: {
+      ok: !maintenance,
+      version: SERVICE_VERSION,
+      tokenBalance: Number(user?.tokenBalance ?? 0),
+      message: maintenance ? '服务正在维护中' : undefined,
+    },
+  });
+});
