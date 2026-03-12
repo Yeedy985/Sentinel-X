@@ -138,14 +138,52 @@ async function approveRecharge(rechargeId: number, txId: string) {
   console.log(`[RechargeScanner] ✅ Auto-approved recharge #${rechargeId}: ${usdtAmount} USDT, TX: ${txId.slice(0, 20)}...`);
 }
 
+// ── 超时订单自动标记失败 + 释放地址 ──
+async function expireTimedOutOrders() {
+  // 找到所有已过期的锁定地址（lockExpiresAt < now）且关联了订单
+  const expiredAddresses = await db.paymentAddress.findMany({
+    where: {
+      status: 'LOCKED',
+      lockExpiresAt: { lt: new Date() },
+      lockedOrderId: { not: null },
+    },
+  });
+
+  for (const addr of expiredAddresses) {
+    const orderId = addr.lockedOrderId!;
+    // 将关联的 PENDING 订单标记为 FAILED
+    try {
+      await db.rechargeRecord.updateMany({
+        where: { id: orderId, status: 'PENDING' },
+        data: {
+          status: 'FAILED',
+          note: `${addr.network} 充值超时未支付，系统自动关闭`,
+        },
+      });
+      console.log(`[RechargeScanner] ⏰ Order #${orderId} expired, marked as FAILED`);
+    } catch {}
+
+    // 释放地址
+    try {
+      await db.paymentAddress.update({
+        where: { id: addr.id },
+        data: { status: 'IDLE', lockedByUser: null, lockedOrderId: null, lockExpiresAt: null },
+      });
+    } catch {}
+  }
+
+  // 释放没有关联订单的过期锁定地址
+  await db.paymentAddress.updateMany({
+    where: { status: 'LOCKED', lockExpiresAt: { lt: new Date() }, lockedOrderId: null },
+    data: { status: 'IDLE', lockedByUser: null, lockedOrderId: null, lockExpiresAt: null },
+  });
+}
+
 // ── 主扫描循环 ──
 async function scanLockedAddresses() {
   try {
-    // 先解锁过期地址
-    await db.paymentAddress.updateMany({
-      where: { status: 'LOCKED', lockExpiresAt: { lt: new Date() } },
-      data: { status: 'IDLE', lockedByUser: null, lockedOrderId: null, lockExpiresAt: null },
-    });
+    // 先处理超时订单：标记失败 + 释放地址
+    await expireTimedOutOrders();
 
     // 获取所有锁定中的地址（有关联的充值订单）
     const lockedAddresses = await db.paymentAddress.findMany({
