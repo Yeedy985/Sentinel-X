@@ -77,18 +77,26 @@ scanRoutes.post('/request', async (c) => {
   }
 
   // 检查缓存
-  const cacheWindow = await getSetting('cache_window_minutes', 5);
+  const cacheWindowRaw = await getSetting('cache_window_minutes', 5);
+  const cacheWindow = Number(cacheWindowRaw);
   const cacheKey = enableSearch ? 'scan_with_search' : 'scan_basic';
-  const cacheExpiry = new Date(Date.now() - cacheWindow * 60 * 1000);
+  const now = new Date();
+  const cacheExpiry = new Date(now.getTime() - cacheWindow * 60 * 1000);
+  console.log(`[Cache] check: cacheWindow=${cacheWindow} (raw=${JSON.stringify(cacheWindowRaw)}), cacheKey=${cacheKey}, now=${now.toISOString()}, cacheExpiry=${cacheExpiry.toISOString()}`);
   const cached = await db.scanCache.findFirst({
     where: {
       cacheKey,
       searcherUsed: enableSearch,
-      expiresAt: { gt: new Date() },
+      expiresAt: { gt: now },
       createdAt: { gte: cacheExpiry },
     },
     orderBy: { createdAt: 'desc' },
   });
+  if (cached) {
+    console.log(`[Cache] HIT: id=${cached.id}, createdAt=${cached.createdAt.toISOString()}, expiresAt=${cached.expiresAt.toISOString()}, age=${Math.round((now.getTime() - cached.createdAt.getTime()) / 1000)}s`);
+  } else {
+    console.log('[Cache] MISS: no valid cache found');
+  }
 
   const briefingId = `brf_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
 
