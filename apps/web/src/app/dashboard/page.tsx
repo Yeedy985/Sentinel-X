@@ -10,6 +10,7 @@ import {
   Activity, Zap, TrendingUp,
 } from 'lucide-react';
 import { api, clearToken, isLoggedIn } from '@/lib/api';
+import { QRCodeSVG } from 'qrcode.react';
 
 type TabKey = 'recharge' | 'history' | 'tokens' | 'transactions' | 'scans';
 
@@ -476,6 +477,14 @@ export default function DashboardPage() {
                       </button>
                     </div>
                     {copied === 'wallet' && <p className="text-[11px] text-emerald-400 font-medium">已复制到剪贴板</p>}
+                  </div>
+
+                  {/* QR Code */}
+                  <div className="flex flex-col items-center gap-3 py-4">
+                    <div className="p-3 bg-white rounded-2xl">
+                      <QRCodeSVG value={rechargeOrder.walletAddress} size={180} level="H" />
+                    </div>
+                    <p className="text-[11px] text-slate-500">扫描二维码获取收款地址</p>
                   </div>
 
                   {/* Network Warning */}
