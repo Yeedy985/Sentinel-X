@@ -64,16 +64,29 @@ scanRoutes.post('/request', async (c) => {
     return failAndRecord(`每小时最多请求 ${maxPerHour} 次扫描`, 429);
   }
 
-  // 计算费用
+  // 计费模式
+  const billingMode = await getSetting('billing_mode', 'fixed');
+  const isActualBilling = String(billingMode) === 'actual';
+
+  // 计算费用 (固定模式预扣; 实际模式仅检查余额 > 0)
   const basicPrice = await getSetting('scan_price_basic', 1);
   const searchPrice = await getSetting('scan_price_with_search', 2);
-  const tokenCost = enableSearch ? searchPrice : basicPrice;
+  const fixedCost = enableSearch ? searchPrice : basicPrice;
 
   // 检查余额
   const user = await db.user.findUnique({ where: { id: userId } });
-  if (!user || Number(user.tokenBalance) < tokenCost) {
-    const errMsg = `Token 余额不足，需要 ${tokenCost} Token，当前余额 ${Number(user?.tokenBalance ?? 0)}`;
-    return failAndRecord(errMsg, 402);
+  if (!user) {
+    return failAndRecord('Token 余额不足', 402);
+  }
+  const balance = Number(user.tokenBalance);
+  if (isActualBilling) {
+    if (balance <= 0) {
+      return failAndRecord(`Token 余额不足，当前余额 ${balance}`, 402);
+    }
+  } else {
+    if (balance < fixedCost) {
+      return failAndRecord(`Token 余额不足，需要 ${fixedCost} Token，当前余额 ${balance}`, 402);
+    }
   }
 
   // 检查缓存
@@ -100,28 +113,40 @@ scanRoutes.post('/request', async (c) => {
 
   const briefingId = `brf_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
 
-  // Token 预扣 (事务)
-  const newBalance = Number(user.tokenBalance) - tokenCost;
-  await db.$transaction([
-    db.user.update({
-      where: { id: userId },
-      data: { tokenBalance: BigInt(newBalance) },
-    }),
-    db.tokenTransaction.create({
-      data: {
-        userId,
-        type: 'SCAN_DEDUCT',
-        amount: BigInt(-tokenCost),
-        balanceAfter: BigInt(newBalance),
-        refId: briefingId,
-        description: `扫描扣费${enableSearch ? ' (含搜索增强)' : ''}`,
-      },
-    }),
-  ]);
-
   if (cached) {
-    // 命中缓存: 直接返回缓存结果，不消耗真实 LLM 成本
+    // ────── 缓存命中 ──────
     const briefingData = cached.briefingData as any;
+    // 计算本次扣费: 固定模式用 fixedCost; 实际模式用缓存中记录的上次真实 LLM token 数
+    const cachedTotalTokens = briefingData?._tokenUsage?.totalTokens ?? 0;
+    const tokenCost = isActualBilling ? cachedTotalTokens : fixedCost;
+
+    // 余额二次检查 (实际模式下缓存 token 数可能很大)
+    if (Number(user.tokenBalance) < tokenCost) {
+      return failAndRecord(`Token 余额不足，需要 ${tokenCost} Token，当前余额 ${Number(user.tokenBalance)}`, 402);
+    }
+
+    // 扣费
+    if (tokenCost > 0) {
+      const newBalance = Number(user.tokenBalance) - tokenCost;
+      await db.$transaction([
+        db.user.update({
+          where: { id: userId },
+          data: { tokenBalance: BigInt(newBalance) },
+        }),
+        db.tokenTransaction.create({
+          data: {
+            userId,
+            type: 'SCAN_DEDUCT',
+            amount: BigInt(-tokenCost),
+            balanceAfter: BigInt(newBalance),
+            refId: briefingId,
+            description: isActualBilling
+              ? `扫描扣费 (按实际消耗 ${tokenCost} Token)${enableSearch ? ' 含搜索增强' : ''}`
+              : `扫描扣费${enableSearch ? ' (含搜索增强)' : ''}`,
+          },
+        }),
+      ]);
+    }
 
     // 查原始（非缓存）扫描记录的真实耗时，用于伪装时间
     const originalRecord = await db.scanRecord.findFirst({
@@ -171,7 +196,30 @@ scanRoutes.post('/request', async (c) => {
     });
   }
 
-  // 无缓存: 创建待处理扫描记录，交由 Worker 处理
+  // ────── 无缓存: 真实扫描 ──────
+  // 固定模式: 预扣 fixedCost; 实际模式: 预扣 0 (worker 完成后按实际 token 扣费)
+  const tokenCost = isActualBilling ? 0 : fixedCost;
+
+  if (tokenCost > 0) {
+    const newBalance = Number(user.tokenBalance) - tokenCost;
+    await db.$transaction([
+      db.user.update({
+        where: { id: userId },
+        data: { tokenBalance: BigInt(newBalance) },
+      }),
+      db.tokenTransaction.create({
+        data: {
+          userId,
+          type: 'SCAN_DEDUCT',
+          amount: BigInt(-tokenCost),
+          balanceAfter: BigInt(newBalance),
+          refId: briefingId,
+          description: `扫描扣费${enableSearch ? ' (含搜索增强)' : ''}`,
+        },
+      }),
+    ]);
+  }
+
   // 查询管线信息，填充 SystemScanLog
   const analyzer = await db.pipelineConfig.findFirst({ where: { role: { in: ['ANALYZER', 'ANALYZER_BACKUP'] }, enabled: true }, orderBy: { priority: 'asc' } });
   const searcher = enableSearch ? await db.pipelineConfig.findFirst({ where: { role: 'SEARCHER', enabled: true } }) : null;
@@ -201,8 +249,8 @@ scanRoutes.post('/request', async (c) => {
     },
   });
 
-  // 将扫描任务推入 BullMQ 队列
-  await scanQueue.add('scan', { briefingId, enableSearch, userId });
+  // 将扫描任务推入 BullMQ 队列 (传递 billingMode 以便 worker 知道是否需要后扣费)
+  await scanQueue.add('scan', { briefingId, enableSearch, userId, billingMode: isActualBilling ? 'actual' : 'fixed' });
 
   return c.json<ApiResponse<ScanResponse>>({
     success: true,

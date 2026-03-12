@@ -37,9 +37,10 @@ export const userRoutes = new Hono();
 userRoutes.get('/config', async (c) => {
   const rateRaw = await getSetting('token_to_cny_rate', 10);
   const rate = Number(rateRaw);
+  const billingMode = String(await getSetting('billing_mode', 'fixed'));
   return c.json<ApiResponse>({
     success: true,
-    data: { usdtToTokenRate: rate },
+    data: { usdtToTokenRate: rate, billingMode },
   });
 });
 

@@ -184,7 +184,7 @@ function parseLLMOutput(raw: string): any {
 
 // ── Worker 处理函数 ──
 async function processScanJob(job: any) {
-  const { briefingId, enableSearch, userId } = job.data;
+  const { briefingId, enableSearch, userId, billingMode } = job.data;
   console.log(`[Worker] Processing scan: ${briefingId}`);
 
   try {
@@ -334,18 +334,45 @@ ${signalListText}
     };
 
     const totalCost = searchCost + analyzerCost;
+    const totalTokens = searchTokens + analyzerTokens;
+
+    // Step 4a: 按实际消耗模式后扣费
+    let actualTokenCost = 0;
+    if (billingMode === 'actual' && userId && totalTokens > 0) {
+      actualTokenCost = totalTokens;
+      const userRecord = await db.user.findUnique({ where: { id: userId } });
+      if (userRecord) {
+        const newBal = Math.max(0, Number(userRecord.tokenBalance) - actualTokenCost);
+        await db.$transaction([
+          db.user.update({ where: { id: userId }, data: { tokenBalance: BigInt(newBal) } }),
+          db.tokenTransaction.create({
+            data: {
+              userId,
+              type: 'SCAN_DEDUCT',
+              amount: BigInt(-actualTokenCost),
+              balanceAfter: BigInt(newBal),
+              refId: briefingId,
+              description: `扫描扣费 (按实际消耗 ${actualTokenCost} Token)${enableSearch ? ' 含搜索增强' : ''}`,
+            },
+          }),
+        ]);
+        console.log(`[Worker] Actual billing: deducted ${actualTokenCost} Token from user ${userId}, balance: ${newBal}`);
+      }
+    }
+
     const scanRecord = await db.scanRecord.findFirst({ where: { briefingId } });
-    const tokenCost = scanRecord?.tokenCost ?? 1;
-    const revenueUsd = tokenCost * 0.5; // 假设每 Token 0.5 USD
+    const tokenCost = billingMode === 'actual' ? actualTokenCost : (scanRecord?.tokenCost ?? 1);
+    const revenueUsd = tokenCost * 0.5;
     const profitUsd = revenueUsd - totalCost;
 
-    // Step 4: 更新扫描记录
+    // Step 4b: 更新扫描记录
     await db.scanRecord.updateMany({
       where: { briefingId },
       data: {
         status: 'COMPLETED',
         completedAt: new Date(),
         briefingData: briefingData,
+        tokenCost,
         signalCount: briefingData.triggeredSignals?.length ?? 0,
         alertCount: briefingData.alerts?.length ?? 0,
         realCostUsd: totalCost,
@@ -368,7 +395,6 @@ ${signalListText}
     });
 
     // Step 6: 更新 SystemScanLog token 统计
-    const totalTokens = searchTokens + analyzerTokens;
     console.log(`[Worker] Token stats for ${briefingId}: search=${searchTokens} analyze=${analyzerTokens} total=${totalTokens}`);
     const sysLogUpdate = await db.systemScanLog.updateMany({
       where: { briefingId },
