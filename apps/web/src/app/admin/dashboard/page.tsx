@@ -148,7 +148,7 @@ export default function AdminDashboardPage() {
         ) : logTab === 'system' ? (
           <div>
             <div className="px-6 py-2.5 text-xs text-slate-600 border-b border-slate-800/30">
-              管理后台按配置的自动扫描时间执行300信号分析，每次记录 Token 消耗
+              系统自动执行和用户触发的真实 LLM 扫描（不含缓存命中），记录实际 Token 消耗
             </div>
             <div className="divide-y divide-slate-800/20">
               {systemScans.length === 0 && (
@@ -199,7 +199,7 @@ export default function AdminDashboardPage() {
         ) : (
           <div>
             <div className="px-6 py-2.5 text-xs text-slate-600 border-b border-slate-800/30">
-              用户通过公共主页调用300信号扫描服务，缓存时间内推送上次真实扫描结果
+              用户通过 API 调用的所有扫描记录，包含真实扫描和缓存命中
             </div>
             <div className="divide-y divide-slate-800/20">
               {callLogs.length === 0 && (

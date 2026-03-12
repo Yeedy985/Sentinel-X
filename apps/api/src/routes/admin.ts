@@ -515,59 +515,43 @@ adminRoutes.get('/finance', async (c) => {
   });
 });
 
-// ── 系统扫描记录 (所有扫描: 管理员触发 + 用户API调用) ──
+// ── 扫描记录 (真实 LLM 扫描: 系统自动 + 用户触发, 不含缓存命中) ──
 adminRoutes.get('/system-scans', async (c) => {
   const page = Math.max(1, Number(c.req.query('page')) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(c.req.query('pageSize')) || 20));
 
   const [total, records] = await Promise.all([
-    db.scanRecord.count(),
-    db.scanRecord.findMany({
+    db.systemScanLog.count(),
+    db.systemScanLog.findMany({
       orderBy: { startedAt: 'desc' },
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: {
-        user: { select: { email: true, nickname: true } },
-      },
     }),
   ]);
-
-  // 批量查询关联的 SystemScanLog (管理员扫描 + 用户扫描都有)
-  const allBriefingIds = records.map((r: any) => r.briefingId);
-  const sysLogs = allBriefingIds.length > 0
-    ? await db.systemScanLog.findMany({ where: { briefingId: { in: allBriefingIds } } })
-    : [];
-  const sysLogMap = new Map(sysLogs.map(l => [l.briefingId, l]));
 
   return c.json<ApiResponse>({
     success: true,
     data: {
-      data: records.map((r: any) => {
-        const sl = sysLogMap.get(r.briefingId);
-        return {
-          id: r.id,
-          briefingId: r.briefingId,
-          status: r.status,
-          enableSearch: r.enableSearch,
-          isCached: r.isCached,
-          signalCount: r.signalCount,
-          alertCount: r.alertCount,
-          tokenCostSearch: sl?.tokenCostSearch ?? 0,
-          tokenCostAnalyze: sl?.tokenCostAnalyze ?? 0,
-          tokenCostTotal: sl?.tokenCostTotal ?? r.tokenCost,
-          realCostUsd: sl ? Number(sl.realCostUsd) : Number(r.realCostUsd),
-          searcherProvider: sl?.searcherProvider || null,
-          searcherModel: sl?.searcherModel || null,
-          analyzerProvider: sl?.analyzerProvider || null,
-          analyzerModel: sl?.analyzerModel || null,
-          errorMessage: r.errorMessage,
-          briefingData: r.briefingData || null,
-          userEmail: r.user?.email,
-          userNickname: r.user?.nickname,
-          startedAt: r.startedAt.toISOString(),
-          completedAt: r.completedAt?.toISOString() || null,
-        };
-      }),
+      data: records.map((s: any) => ({
+        id: s.id,
+        briefingId: s.briefingId,
+        status: s.status,
+        enableSearch: s.enableSearch,
+        signalCount: s.signalCount,
+        alertCount: s.alertCount,
+        tokenCostSearch: s.tokenCostSearch,
+        tokenCostAnalyze: s.tokenCostAnalyze,
+        tokenCostTotal: s.tokenCostTotal,
+        realCostUsd: Number(s.realCostUsd),
+        searcherProvider: s.searcherProvider,
+        searcherModel: s.searcherModel,
+        analyzerProvider: s.analyzerProvider,
+        analyzerModel: s.analyzerModel,
+        errorMessage: s.errorMessage,
+        briefingData: s.briefingData || null,
+        startedAt: s.startedAt.toISOString(),
+        completedAt: s.completedAt?.toISOString() || null,
+      })),
       total,
       page,
       pageSize,
@@ -576,14 +560,16 @@ adminRoutes.get('/system-scans', async (c) => {
   });
 });
 
-// ── 用户调用记录 (用户通过公共服务调用的扫描) ──
+// ── 调用记录 (用户调用的扫描, 含缓存命中) ──
 adminRoutes.get('/call-logs', async (c) => {
   const page = Math.max(1, Number(c.req.query('page')) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(c.req.query('pageSize')) || 20));
 
+  const where = { userId: { not: undefined as any } }; // 只查有 userId 的记录（用户调用）
   const [total, records] = await Promise.all([
-    db.scanRecord.count(),
+    db.scanRecord.count({ where }),
     db.scanRecord.findMany({
+      where,
       orderBy: { startedAt: 'desc' },
       skip: (page - 1) * pageSize,
       take: pageSize,
