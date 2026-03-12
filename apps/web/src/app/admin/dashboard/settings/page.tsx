@@ -13,6 +13,8 @@ const SETTING_LABELS: Record<string, { label: string; type: 'number' | 'boolean'
   max_scans_per_user_per_hour: { label: '每小时扫描上限', type: 'number', desc: '单用户每小时最多扫描次数' },
   max_concurrent_scans: { label: '最大并发扫描', type: 'number', desc: '系统同时处理的最大扫描数' },
   token_to_cny_rate: { label: '每 USDT 对应 Token 数量', type: 'number', desc: '充值时 1 USDT 可兑换的 Token 数量（如填写 180000 则 1 USDT = 180,000 Token）' },
+  address_lock_minutes: { label: '收款地址锁定时间 (分钟)', type: 'number', desc: '用户创建充值订单后收款地址的锁定时长，默认 15 分钟' },
+  recharge_scan_interval_seconds: { label: '扫链间隔 (秒)', type: 'number', desc: '自动扫描链上 USDT 交易的间隔时间，默认 5 秒' },
   maintenance_mode: { label: '维护模式', type: 'boolean', desc: '开启后所有扫描请求将返回维护提示' },
   announcement: { label: '公告', type: 'string', desc: '显示在公共主页的系统公告' },
 };

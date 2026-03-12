@@ -11,7 +11,18 @@ import { db } from '@sentinel/db';
 const TRC20_USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 const ERC20_USDT_CONTRACT = '0xdAC17F958D2ee523a2206206994597C13D831ec7';
 const TRONGRID_BASE = 'https://api.trongrid.io';
-const SCAN_INTERVAL_MS = 30_000; // 30秒扫一次
+const DEFAULT_SCAN_INTERVAL_SECONDS = 5;
+
+// 从数据库读取扫链间隔（秒）
+async function getScanIntervalMs(): Promise<number> {
+  try {
+    const setting = await db.adminSetting.findUnique({ where: { key: 'recharge_scan_interval_seconds' } });
+    const seconds = Number(setting?.value ?? DEFAULT_SCAN_INTERVAL_SECONDS);
+    return Math.max(1, seconds) * 1000;
+  } catch {
+    return DEFAULT_SCAN_INTERVAL_SECONDS * 1000;
+  }
+}
 
 // ── TRC20: 查询地址的 USDT 转入记录 ──
 async function getTrc20Transfers(address: string, sinceTimestamp: number): Promise<Array<{
@@ -28,7 +39,7 @@ async function getTrc20Transfers(address: string, sinceTimestamp: number): Promi
 
     const res = await fetch(url, { headers });
     if (!res.ok) return [];
-    const json = await res.json();
+    const json: any = await res.json();
     const data = json.data || [];
     return data.map((tx: any) => ({
       txId: tx.transaction_id,
@@ -51,12 +62,11 @@ async function getErc20Transfers(address: string, sinceTimestamp: number): Promi
 }>> {
   try {
     const apiKey = process.env.ETHERSCAN_API_KEY || '';
-    const startBlock = 0; // 简化: 用时间过滤而不是区块号
     const url = `https://api.etherscan.io/api?module=account&action=tokentx&contractaddress=${ERC20_USDT_CONTRACT}&address=${address}&page=1&offset=20&sort=desc&apikey=${apiKey}`;
 
     const res = await fetch(url);
     if (!res.ok) return [];
-    const json = await res.json();
+    const json: any = await res.json();
     if (json.status !== '1' || !json.result) return [];
 
     return json.result
@@ -182,13 +192,16 @@ async function scanLockedAddresses() {
   }
 }
 
-// ── 启动扫描器 ──
+// ── 启动扫描器 (动态间隔，从设置读取) ──
 export function startRechargeScanner() {
-  console.log(`[RechargeScanner] 🔍 Started, scanning every ${SCAN_INTERVAL_MS / 1000}s`);
+  console.log(`[RechargeScanner] 🔍 Started (default interval: ${DEFAULT_SCAN_INTERVAL_SECONDS}s, configurable in admin settings)`);
 
-  // 启动后延迟10秒开始第一次扫描
-  setTimeout(() => {
-    scanLockedAddresses();
-    setInterval(scanLockedAddresses, SCAN_INTERVAL_MS);
-  }, 10_000);
+  async function loop() {
+    await scanLockedAddresses();
+    const intervalMs = await getScanIntervalMs();
+    setTimeout(loop, intervalMs);
+  }
+
+  // 启动后延迟5秒开始第一次扫描
+  setTimeout(loop, 5_000);
 }
