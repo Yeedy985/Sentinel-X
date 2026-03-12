@@ -11,6 +11,8 @@
 import { Worker, Queue } from 'bullmq';
 import { db } from '@sentinel/db';
 import { decryptValue } from '../lib/crypto';
+import { calculateScores } from '@sentinel/shared';
+import type { ServerSignalDef } from '@sentinel/shared';
 
 // ── Redis 连接配置 ──
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
@@ -336,6 +338,14 @@ ${signalListText}
     const totalCost = searchCost + analyzerCost;
     const totalTokens = searchTokens + analyzerTokens;
 
+    // Step 3b: 计算 SD/SV/SR 评分
+    const signalDefsRaw = await db.signalDefinition.findMany({ where: { enabled: true } });
+    const signalDefMap = new Map<number, ServerSignalDef>(
+      signalDefsRaw.map(d => [d.signalId, { signalId: d.signalId, group: d.group, category: d.category, impact: d.impact, halfLife: d.halfLife, confidence: d.confidence }])
+    );
+    const scores = calculateScores(briefingData.triggeredSignals || [], signalDefMap);
+    console.log(`[Worker] Scores for ${briefingId}: SD=${scores.scoreDirection} SV=${scores.scoreVolatility} SR=${scores.scoreRisk} (${scores.activeSignals} signals)`);
+
     // Step 4a: 按实际消耗模式后扣费
     let actualTokenCost = 0;
     if (billingMode === 'actual' && userId && totalTokens > 0) {
@@ -380,6 +390,9 @@ ${signalListText}
         realCostUsd: totalCost,
         revenueUsd,
         profitUsd,
+        scoreDirection: scores.scoreDirection,
+        scoreVolatility: scores.scoreVolatility,
+        scoreRisk: scores.scoreRisk,
       },
     });
 
@@ -410,6 +423,9 @@ ${signalListText}
         realCostUsd: totalCost,
         briefingData: briefingData,
         completedAt: new Date(),
+        scoreDirection: scores.scoreDirection,
+        scoreVolatility: scores.scoreVolatility,
+        scoreRisk: scores.scoreRisk,
       },
     });
 

@@ -9,8 +9,8 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { db } from '@sentinel/db';
 import { requireApiToken } from '../middleware/auth';
-import { SERVICE_VERSION } from '@sentinel/shared';
-import type { ApiResponse, ScanResponse, ScanStatusResponse, BriefingResponse } from '@sentinel/shared';
+import { SERVICE_VERSION, calculateScores } from '@sentinel/shared';
+import type { ApiResponse, ScanResponse, ScanStatusResponse, BriefingResponse, ServerSignalDef } from '@sentinel/shared';
 import * as crypto from 'node:crypto';
 import { scanQueue } from '../worker/scanWorker';
 
@@ -167,6 +167,13 @@ scanRoutes.post('/request', async (c) => {
     const tokenRate = Number(await getSetting('token_to_cny_rate', 100000));
     const revenueUsd = tokenRate > 0 ? tokenCost / tokenRate : 0;
 
+    // 计算 SD/SV/SR 评分 (缓存推送复用原始简报的信号)
+    const signalDefsRaw = await db.signalDefinition.findMany({ where: { enabled: true } });
+    const signalDefMap = new Map<number, ServerSignalDef>(
+      signalDefsRaw.map(d => [d.signalId, { signalId: d.signalId, group: d.group, category: d.category, impact: d.impact, halfLife: d.halfLife, confidence: d.confidence }])
+    );
+    const scores = calculateScores(briefingData?.triggeredSignals || [], signalDefMap);
+
     await db.scanRecord.create({
       data: {
         userId,
@@ -181,6 +188,9 @@ scanRoutes.post('/request', async (c) => {
         realCostUsd: 0,
         revenueUsd,
         profitUsd: revenueUsd,
+        scoreDirection: scores.scoreDirection,
+        scoreVolatility: scores.scoreVolatility,
+        scoreRisk: scores.scoreRisk,
         briefingData: cached.briefingData as any ?? undefined,
         startedAt: fakeStartedAt,
         completedAt: fakeCompletedAt,

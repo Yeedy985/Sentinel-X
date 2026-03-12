@@ -186,6 +186,11 @@ export default function AdminDashboardPage() {
                         <div className="text-sm text-slate-500">
                           {s.signalCount} 信号 · {s.alertCount} 预警 · ${s.realCostUsd.toFixed(4)}
                         </div>
+                        {s.scoreDirection != null && (
+                          <div className="text-xs text-slate-500 mt-1 font-mono">
+                            SD {s.scoreDirection > 0 ? '+' : ''}{s.scoreDirection.toFixed(1)} · SV {s.scoreVolatility.toFixed(1)} · SR {s.scoreRisk.toFixed(1)}
+                          </div>
+                        )}
                       </>
                     ) : s.status === 'FAILED' ? (
                       <span className="text-[15px] text-red-400 font-medium">失败</span>
@@ -239,6 +244,11 @@ export default function AdminDashboardPage() {
                     <div className="text-sm text-emerald-400 font-medium">
                       利润 ${r.profitUsd.toFixed(4)}
                     </div>
+                    {r.scoreDirection != null && (
+                      <div className="text-xs text-slate-500 mt-1 font-mono">
+                        SD {r.scoreDirection > 0 ? '+' : ''}{r.scoreDirection.toFixed(1)} · SV {r.scoreVolatility.toFixed(1)} · SR {r.scoreRisk.toFixed(1)}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
