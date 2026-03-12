@@ -43,6 +43,7 @@ export default function DashboardPage() {
   const [usdtRate, setUsdtRate] = useState(10);
   const [selectedNetwork, setSelectedNetwork] = useState<'TRC20' | 'ERC20'>('TRC20');
   const [lockCountdown, setLockCountdown] = useState('');
+  const [paidConfirmed, setPaidConfirmed] = useState(false);
   const QUICK_AMOUNTS = [5, 10, 20, 50, 100];
 
   useEffect(() => {
@@ -128,6 +129,7 @@ export default function DashboardPage() {
     const res = await api.createRecharge(amount, selectedNetwork);
     if (res.success) {
       setRechargeOrder(res.data);
+      setPaidConfirmed(false);
       showMsg('success', `充值订单已创建: ${amount} USDT (${selectedNetwork})`);
       setRechargeAmount('');
     } else {
@@ -489,16 +491,32 @@ export default function DashboardPage() {
                     <div className="flex justify-between"><span className="text-slate-500">有效期至</span><span className="text-slate-300">{new Date(rechargeOrder.expiresAt).toLocaleString('zh-CN')}</span></div>
                   </div>
 
-                  {/* Status Info */}
-                  {rechargeOrder.status === 'PENDING' && (
-                    <div className="p-4 rounded-xl bg-cyan-500/[0.06] border border-cyan-500/15 text-center space-y-2">
-                      <div className="flex items-center justify-center gap-2 text-cyan-400 text-sm font-semibold">
-                        <Clock className="w-4 h-4 animate-pulse" />
-                        等待管理员确认到账
+                  {/* Actions */}
+                  {rechargeOrder.status === 'PENDING' && !paidConfirmed && (
+                    <button
+                      onClick={() => setPaidConfirmed(true)}
+                      className="w-full py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/15"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      我已支付
+                    </button>
+                  )}
+
+                  {rechargeOrder.status === 'PENDING' && paidConfirmed && (
+                    <div className="space-y-3">
+                      <button
+                        disabled
+                        className="w-full py-3.5 bg-gradient-to-r from-slate-700 to-slate-600 rounded-xl text-sm font-bold flex items-center justify-center gap-2 opacity-80 cursor-not-allowed"
+                      >
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        请等待支付确认中...
+                      </button>
+                      <div className="p-3.5 rounded-xl bg-cyan-500/[0.06] border border-cyan-500/15 text-center space-y-1.5">
+                        <p className="text-xs text-cyan-400 font-medium">系统正在自动验证链上交易</p>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          确认到账后将自动为您充值 Token，请勿关闭页面
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-500 leading-relaxed">
-                        请完成链上转账后耐心等待，管理员确认到账后将自动为您充值 Token
-                      </p>
                     </div>
                   )}
 
