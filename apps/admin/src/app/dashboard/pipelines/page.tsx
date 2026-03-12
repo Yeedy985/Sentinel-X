@@ -65,95 +65,7 @@ const ROLE_OPTIONS = [
 
 const inputCls = 'w-full px-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 text-[15px] text-white placeholder-slate-500 focus:border-purple-500/70 focus:ring-1 focus:ring-purple-500/20 focus:outline-none transition-all';
 
-// ==================== 全局自动扫描单例 (sessionStorage 持久化, 跨页面/刷新恢复) ====================
 const AUTO_SCAN_KEY = 'admin-auto-scan';
-
-function _loadAutoScanState(): { running: boolean; intervalMins: number; startedAt: number; count: number } | null {
-  try {
-    const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(AUTO_SCAN_KEY) : null;
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return null;
-}
-
-function _saveAutoScanState(state: { running: boolean; intervalMins: number; startedAt: number; count: number } | null) {
-  try {
-    if (typeof sessionStorage !== 'undefined') {
-      if (state) sessionStorage.setItem(AUTO_SCAN_KEY, JSON.stringify(state));
-      else sessionStorage.removeItem(AUTO_SCAN_KEY);
-    }
-  } catch {}
-}
-
-const _adminAutoScan = {
-  running: false,
-  intervalId: null as ReturnType<typeof setInterval> | null,
-  countdownId: null as ReturnType<typeof setInterval> | null,
-  countdown: 0,
-  totalSec: 0,
-  count: 0,
-  intervalMins: 0,
-  startedAt: 0,
-  scanFn: null as (() => void) | null,
-  listeners: new Set<() => void>(),
-  notify() { this.listeners.forEach(fn => fn()); },
-  stop() {
-    if (this.intervalId) { clearInterval(this.intervalId); this.intervalId = null; }
-    if (this.countdownId) { clearInterval(this.countdownId); this.countdownId = null; }
-    this.running = false;
-    this.countdown = 0;
-    _saveAutoScanState(null);
-    this.notify();
-  },
-  _startTimers(mins: number, triggerNow: boolean) {
-    if (this.intervalId) clearInterval(this.intervalId);
-    if (this.countdownId) clearInterval(this.countdownId);
-    this.running = true;
-    this.intervalMins = mins;
-    this.totalSec = mins * 60;
-
-    // 计算距下次扫描的剩余秒数
-    if (this.startedAt > 0) {
-      const elapsed = Math.floor((Date.now() - this.startedAt) / 1000);
-      const cycleElapsed = elapsed % this.totalSec;
-      this.countdown = this.totalSec - cycleElapsed;
-    } else {
-      this.countdown = this.totalSec;
-    }
-
-    if (triggerNow && this.scanFn) this.scanFn();
-
-    this.countdownId = setInterval(() => {
-      this.countdown = this.countdown <= 1 ? this.totalSec : this.countdown - 1;
-      this.notify();
-    }, 1000);
-    this.intervalId = setInterval(() => {
-      this.count++;
-      _saveAutoScanState({ running: true, intervalMins: mins, startedAt: this.startedAt, count: this.count });
-      if (this.scanFn) this.scanFn();
-      this.notify();
-    }, mins * 60 * 1000);
-    this.notify();
-  },
-  start(mins: number, scanFn: () => void) {
-    this.stop();
-    this.scanFn = scanFn;
-    this.startedAt = Date.now();
-    this.count = 1;
-    _saveAutoScanState({ running: true, intervalMins: mins, startedAt: this.startedAt, count: this.count });
-    this._startTimers(mins, true);
-  },
-  // 从 sessionStorage 恢复 (页面刷新/导航回来时调用)
-  restore(scanFn: () => void) {
-    const saved = _loadAutoScanState();
-    if (!saved || !saved.running || saved.intervalMins <= 0) return false;
-    this.scanFn = scanFn;
-    this.startedAt = saved.startedAt;
-    this.count = saved.count;
-    this._startTimers(saved.intervalMins, false); // 恢复时不立即触发扫描
-    return true;
-  },
-};
 
 function emptyForm() {
   return { role: 'ANALYZER', provider: 'deepseek', model: 'deepseek-chat', apiUrl: 'https://api.deepseek.com/v1/chat/completions', apiKey: '', priority: 0, enabled: true };
@@ -182,6 +94,8 @@ export default function PipelinesPage() {
   const [autoScanInterval, setAutoScanInterval] = useState(0);
   const [autoScanCountdown, setAutoScanCountdown] = useState(0);
   const [autoScanCount, setAutoScanCount] = useState(0);
+  const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scanFnRef = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -198,18 +112,6 @@ export default function PipelinesPage() {
       setAutoScanInterval(mins);
     }
   };
-
-  // 同步全局自动扫描状态到组件
-  useEffect(() => {
-    const sync = () => {
-      setAutoScanEnabled(_adminAutoScan.running);
-      setAutoScanCountdown(_adminAutoScan.countdown);
-      setAutoScanCount(_adminAutoScan.count);
-    };
-    _adminAutoScan.listeners.add(sync);
-    sync();
-    return () => { _adminAutoScan.listeners.delete(sync); };
-  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -338,23 +240,63 @@ export default function PipelinesPage() {
   // 始终保持 scanFnRef 指向最新的 handleTriggerScan
   scanFnRef.current = () => handleTriggerScan(true);
 
+  const clearTimers = () => {
+    if (scanTimerRef.current) { clearInterval(scanTimerRef.current); scanTimerRef.current = null; }
+    if (countdownTimerRef.current) { clearInterval(countdownTimerRef.current); countdownTimerRef.current = null; }
+  };
+
+  const _boot = (mins: number, startedAt: number, count: number, triggerNow: boolean) => {
+    clearTimers();
+    const totalSec = mins * 60;
+    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+    const cycleElapsed = elapsed % totalSec;
+    const remaining = totalSec - cycleElapsed;
+
+    setAutoScanEnabled(true);
+    setAutoScanCountdown(remaining);
+    setAutoScanCount(count);
+
+    if (triggerNow) scanFnRef.current();
+
+    countdownTimerRef.current = setInterval(() => {
+      setAutoScanCountdown(prev => prev <= 1 ? totalSec : prev - 1);
+    }, 1000);
+    scanTimerRef.current = setInterval(() => {
+      setAutoScanCount(prev => {
+        const next = prev + 1;
+        try { sessionStorage.setItem(AUTO_SCAN_KEY, JSON.stringify({ running: true, intervalMins: mins, startedAt, count: next })); } catch {}
+        return next;
+      });
+      scanFnRef.current();
+    }, totalSec * 1000);
+  };
+
   const startAutoScan = () => {
     if (autoScanInterval <= 0) return;
-    _adminAutoScan.start(autoScanInterval, () => scanFnRef.current());
+    const now = Date.now();
+    try { sessionStorage.setItem(AUTO_SCAN_KEY, JSON.stringify({ running: true, intervalMins: autoScanInterval, startedAt: now, count: 1 })); } catch {}
+    _boot(autoScanInterval, now, 1, true);
   };
 
   const stopAutoScan = () => {
-    _adminAutoScan.stop();
+    clearTimers();
+    setAutoScanEnabled(false);
+    setAutoScanCountdown(0);
+    try { sessionStorage.removeItem(AUTO_SCAN_KEY); } catch {}
   };
 
-  // 挂载时: 如果全局单例未运行, 从 sessionStorage 恢复
+  // 挂载时: 从 sessionStorage 恢复自动扫描
   useEffect(() => {
-    if (!_adminAutoScan.running) {
-      _adminAutoScan.restore(() => scanFnRef.current());
-    } else {
-      // 已运行但 scanFn 可能指向旧闭包, 更新它
-      _adminAutoScan.scanFn = () => scanFnRef.current();
-    }
+    try {
+      const raw = sessionStorage.getItem(AUTO_SCAN_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved?.running && saved.intervalMins > 0) {
+          _boot(saved.intervalMins, saved.startedAt, saved.count, false);
+        }
+      }
+    } catch {}
+    return () => { clearTimers(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatCountdown = (seconds: number) => {
