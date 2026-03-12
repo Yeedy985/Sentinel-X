@@ -722,7 +722,7 @@ adminRoutes.post('/signals/toggle-group', async (c) => {
 
 // POST /signals/reset — 恢复所有信号为默认值 (重新种子)
 adminRoutes.post('/signals/reset', async (c) => {
-  const { SIGNAL_MATRIX } = await import('../../../../packages/db/src/signalMatrix');
+  const { SIGNAL_MATRIX } = await import('@sentinel/db');
   let count = 0;
   for (const sig of SIGNAL_MATRIX) {
     await db.signalDefinition.upsert({
