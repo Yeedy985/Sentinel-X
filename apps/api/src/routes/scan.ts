@@ -163,6 +163,10 @@ scanRoutes.post('/request', async (c) => {
     const fakeStartedAt = new Date();
     const fakeCompletedAt = new Date(fakeStartedAt.getTime() + originalDurationMs);
 
+    // 收入 = 用户消耗的 Token / tokenRate (1 USDT = tokenRate Token)
+    const tokenRate = Number(await getSetting('token_to_cny_rate', 10));
+    const revenueUsd = tokenRate > 0 ? tokenCost / tokenRate : 0;
+
     await db.scanRecord.create({
       data: {
         userId,
@@ -175,8 +179,8 @@ scanRoutes.post('/request', async (c) => {
         alertCount: briefingData?.alerts?.length ?? 0,
         enableSearch,
         realCostUsd: 0,
-        revenueUsd: tokenCost * 0.5,
-        profitUsd: tokenCost * 0.5,
+        revenueUsd,
+        profitUsd: revenueUsd,
         briefingData: cached.briefingData as any ?? undefined,
         startedAt: fakeStartedAt,
         completedAt: fakeCompletedAt,
