@@ -210,34 +210,13 @@ scanRoutes.get('/briefings', async (c) => {
     take: limit,
   });
 
-  // 查询关联的 SystemScanLog 获取真实 LLM token 统计
-  // 对缓存记录，需要追溯到产生该缓存的原始扫描的 token 数据
-  const directBriefingIds = records.filter(r => !r.isCached).map(r => r.briefingId);
-  const cachedRecords = records.filter(r => r.isCached && r.cacheId);
-  const cacheIds = cachedRecords.map(r => r.cacheId!);
-  // 查找原始（非缓存）扫描记录以获取其 briefingId → SystemScanLog
-  const originalRecords = cacheIds.length > 0
-    ? await db.scanRecord.findMany({
-        where: { cacheId: { in: cacheIds }, isCached: false },
-        select: { cacheId: true, briefingId: true },
-      })
-    : [];
-  const cacheToOriginalBriefing = new Map(originalRecords.map(r => [r.cacheId!, r.briefingId]));
-  const allLookupIds = [...directBriefingIds, ...originalRecords.map(r => r.briefingId)];
-  const sysLogs = allLookupIds.length > 0
-    ? await db.systemScanLog.findMany({ where: { briefingId: { in: allLookupIds } } })
-    : [];
-  const sysLogMap = new Map(sysLogs.map(l => [l.briefingId, l]));
-
+  // Token 统计直接从 briefingData._tokenUsage 读取（scanWorker 写入时嵌入）
+  // 缓存命中时 briefingData 是从原始扫描的 scanCache 复制的，自动继承 _tokenUsage
   const briefings: BriefingResponse[] = records
     .filter((r) => r.briefingData)
     .map((r) => {
       const d = r.briefingData as any;
-      // 对缓存记录，用原始扫描的 briefingId 查 SystemScanLog
-      const lookupId = r.isCached && r.cacheId
-        ? cacheToOriginalBriefing.get(r.cacheId) || r.briefingId
-        : r.briefingId;
-      const sl = sysLogMap.get(lookupId);
+      const tu = d._tokenUsage;
       return {
         briefingId: r.briefingId,
         timestamp: r.completedAt?.getTime() ?? r.startedAt.getTime(),
@@ -254,9 +233,9 @@ scanRoutes.get('/briefings', async (c) => {
           analyzerProvider: 'unknown',
         },
         serverTokenUsage: {
-          searchTokens: sl?.tokenCostSearch ?? 0,
-          analyzeTokens: sl?.tokenCostAnalyze ?? 0,
-          totalTokens: sl?.tokenCostTotal ?? 0,
+          searchTokens: tu?.searchTokens ?? 0,
+          analyzeTokens: tu?.analyzeTokens ?? 0,
+          totalTokens: tu?.totalTokens ?? 0,
         },
       };
     });

@@ -322,6 +322,12 @@ ${signalListText}
       hasMarketData: false,
       analyzerProvider: analyzerPipeline.provider,
     };
+    // 把 token 统计嵌入 briefingData，这样无论是 scanRecord 还是 scanCache 都能携带
+    briefingData._tokenUsage = {
+      searchTokens,
+      analyzeTokens: analyzerTokens,
+      totalTokens: searchTokens + analyzerTokens,
+    };
 
     const totalCost = searchCost + analyzerCost;
     const scanRecord = await db.scanRecord.findFirst({ where: { briefingId } });
