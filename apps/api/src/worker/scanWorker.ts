@@ -79,6 +79,7 @@ async function callLLM(config: {
     const parts = data.candidates?.[0]?.content?.parts || [];
     const text = parts.map((p: any) => p.text || '').join('\n');
     const meta = data.usageMetadata;
+    console.log('[callLLM][gemini] raw usageMetadata:', JSON.stringify(meta));
     const usage = meta
       ? { promptTokens: meta.promptTokenCount || 0, completionTokens: meta.candidatesTokenCount || 0, totalTokens: meta.totalTokenCount || 0 }
       : emptyUsage;
@@ -110,6 +111,7 @@ async function callLLM(config: {
     const data: any = await res.json();
     const text = data.content?.[0]?.text || '';
     const u = data.usage;
+    console.log('[callLLM][anthropic] raw usage:', JSON.stringify(u));
     const usage = u
       ? { promptTokens: u.input_tokens || 0, completionTokens: u.output_tokens || 0, totalTokens: (u.input_tokens || 0) + (u.output_tokens || 0) }
       : emptyUsage;
@@ -149,9 +151,11 @@ async function callLLM(config: {
   const data: any = await res.json();
   const text = data.choices?.[0]?.message?.content || '';
   const u = data.usage;
+  console.log(`[callLLM][${config.provider}] raw usage:`, JSON.stringify(u));
   const usage = u
     ? { promptTokens: u.prompt_tokens || 0, completionTokens: u.completion_tokens || 0, totalTokens: u.total_tokens || 0 }
     : emptyUsage;
+  console.log(`[callLLM][${config.provider}] parsed usage:`, JSON.stringify(usage));
   return { text, usage };
 }
 
@@ -363,9 +367,10 @@ ${signalListText}
       },
     });
 
-    // Step 6: 更新 SystemScanLog token 统计 (管理员扫描)
+    // Step 6: 更新 SystemScanLog token 统计
     const totalTokens = searchTokens + analyzerTokens;
-    await db.systemScanLog.updateMany({
+    console.log(`[Worker] Token stats for ${briefingId}: search=${searchTokens} analyze=${analyzerTokens} total=${totalTokens}`);
+    const sysLogUpdate = await db.systemScanLog.updateMany({
       where: { briefingId },
       data: {
         status: 'COMPLETED',
@@ -380,6 +385,7 @@ ${signalListText}
       },
     });
 
+    console.log(`[Worker] SystemScanLog updated: ${sysLogUpdate.count} rows for ${briefingId}`);
     console.log(`[Worker] Scan completed: ${briefingId} (tokens: search=${searchTokens} analyze=${analyzerTokens} total=${totalTokens}, cost: $${totalCost.toFixed(4)}, profit: $${profitUsd.toFixed(4)})`);
   } catch (error: any) {
     console.error(`[Worker] Scan failed: ${briefingId}`, error.message);
