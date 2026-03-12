@@ -529,6 +529,14 @@ export default function DashboardPage() {
                       <p className="text-xs text-slate-500">Token 已到账，请刷新页面查看余额</p>
                     </div>
                   )}
+
+                  {/* 允许创建新订单 */}
+                  <button
+                    onClick={() => { setRechargeOrder(null); setPaidConfirmed(false); }}
+                    className="w-full py-2.5 text-xs font-medium text-slate-500 hover:text-slate-300 hover:bg-white/[0.03] rounded-xl transition-all border border-dashed border-white/[0.06]"
+                  >
+                    + 创建新的充值订单
+                  </button>
                 </div>
               ) : (
                 <div className="p-10 rounded-2xl bg-white/[0.015] border border-dashed border-white/[0.06] flex flex-col items-center justify-center gap-4 text-center min-h-[300px]">
@@ -572,22 +580,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {r.status === 'PENDING' && (
-                    <button
-                      onClick={() => handleConfirmPayment(r.id)}
-                      className="px-3.5 py-2 text-xs font-semibold bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 rounded-xl transition-all border border-amber-500/15"
-                    >
-                      确认到账
-                    </button>
-                  )}
-                  {r.status === 'COMPLETED' && !r.note?.includes('已兑换') && (
-                    <button
-                      onClick={() => handleExchange(r.id)}
-                      disabled={exchangeLoading === r.id}
-                      className="px-3.5 py-2 text-xs font-semibold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 rounded-xl transition-all flex items-center gap-1.5 border border-emerald-500/15"
-                    >
-                      {exchangeLoading === r.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRightLeft className="w-3 h-3" />}
-                      兑换Token
-                    </button>
+                    <span className="px-3.5 py-2 text-xs font-semibold bg-cyan-500/10 text-cyan-400 rounded-xl border border-cyan-500/15 flex items-center gap-1.5">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      等待确认
+                    </span>
                   )}
                 </div>
               </div>
