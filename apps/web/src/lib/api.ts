@@ -9,7 +9,7 @@ interface ApiResponse<T = unknown> {
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
-const DEV_MODE = !API_BASE || API_BASE === 'http://localhost:3001';
+const DEV_MODE = typeof window !== 'undefined' && window.location.hostname === 'localhost' && !API_BASE;
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -140,12 +140,14 @@ const mockRecharges: any[] = [];
 
 /* ──────────── Real Request ──────────── */
 async function request<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
-  // No backend URL configured → use mock directly
-  if (!API_BASE) {
+  // Dev mode on localhost without backend → use mock
+  if (DEV_MODE) {
     return getMockResponse(path, options);
   }
 
-  // Backend URL configured → try real request, fall back to mock in dev
+  // Use API_BASE if set, otherwise use relative path (Next.js rewrites will proxy /api/* to backend)
+  const url = API_BASE ? `${API_BASE}${path}` : path;
+
   try {
     const token = getToken();
     const headers: Record<string, string> = {
@@ -154,7 +156,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<ApiR
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    const res = await fetch(url, { ...options, headers });
     const data = await res.json();
 
     if (res.status === 401) {
@@ -163,7 +165,6 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<ApiR
     }
     return data;
   } catch {
-    if (DEV_MODE) return getMockResponse(path, options);
     throw new Error('Backend unreachable');
   }
 }
