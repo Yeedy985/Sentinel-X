@@ -532,32 +532,42 @@ adminRoutes.get('/system-scans', async (c) => {
     }),
   ]);
 
+  // 批量查询关联的 SystemScanLog (管理员扫描有真实 LLM token 统计)
+  const adminBriefingIds = records.filter((r: any) => r.briefingId.startsWith('admin-')).map((r: any) => r.briefingId);
+  const sysLogs = adminBriefingIds.length > 0
+    ? await db.systemScanLog.findMany({ where: { briefingId: { in: adminBriefingIds } } })
+    : [];
+  const sysLogMap = new Map(sysLogs.map(l => [l.briefingId, l]));
+
   return c.json<ApiResponse>({
     success: true,
     data: {
-      data: records.map((r: any) => ({
-        id: r.id,
-        briefingId: r.briefingId,
-        status: r.status,
-        enableSearch: r.enableSearch,
-        isCached: r.isCached,
-        signalCount: r.signalCount,
-        alertCount: r.alertCount,
-        tokenCostSearch: 0,
-        tokenCostAnalyze: 0,
-        tokenCostTotal: r.tokenCost,
-        realCostUsd: Number(r.realCostUsd),
-        searcherProvider: r.searcherProvider,
-        searcherModel: r.searcherModel,
-        analyzerProvider: r.analyzerProvider,
-        analyzerModel: r.analyzerModel,
-        errorMessage: r.errorMessage,
-        briefingData: r.briefingData || null,
-        userEmail: r.user?.email,
-        userNickname: r.user?.nickname,
-        startedAt: r.startedAt.toISOString(),
-        completedAt: r.completedAt?.toISOString() || null,
-      })),
+      data: records.map((r: any) => {
+        const sl = sysLogMap.get(r.briefingId);
+        return {
+          id: r.id,
+          briefingId: r.briefingId,
+          status: r.status,
+          enableSearch: r.enableSearch,
+          isCached: r.isCached,
+          signalCount: r.signalCount,
+          alertCount: r.alertCount,
+          tokenCostSearch: sl?.tokenCostSearch ?? 0,
+          tokenCostAnalyze: sl?.tokenCostAnalyze ?? 0,
+          tokenCostTotal: sl?.tokenCostTotal ?? r.tokenCost,
+          realCostUsd: sl ? Number(sl.realCostUsd) : Number(r.realCostUsd),
+          searcherProvider: sl?.searcherProvider || null,
+          searcherModel: sl?.searcherModel || null,
+          analyzerProvider: sl?.analyzerProvider || null,
+          analyzerModel: sl?.analyzerModel || null,
+          errorMessage: r.errorMessage,
+          briefingData: r.briefingData || null,
+          userEmail: r.user?.email,
+          userNickname: r.user?.nickname,
+          startedAt: r.startedAt.toISOString(),
+          completedAt: r.completedAt?.toISOString() || null,
+        };
+      }),
       total,
       page,
       pageSize,

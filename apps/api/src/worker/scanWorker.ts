@@ -34,6 +34,12 @@ async function getSetting<T>(key: string, fallback: T): Promise<T> {
   return s ? (s.value as T) : fallback;
 }
 
+// ── Token usage 类型 ──
+interface LLMResult {
+  text: string;
+  usage: { promptTokens: number; completionTokens: number; totalTokens: number };
+}
+
 // ── 调用 LLM API (支持 Gemini / Anthropic / OpenAI-compatible) ──
 async function callLLM(config: {
   apiUrl: string;
@@ -41,9 +47,10 @@ async function callLLM(config: {
   model: string;
   provider: string;
   extraParams: any;
-}, systemPrompt: string, userPrompt: string): Promise<string> {
+}, systemPrompt: string, userPrompt: string): Promise<LLMResult> {
   const apiKey = decryptValue(config.apiKeyEnc);
   const combinedPrompt = `${systemPrompt}\n\n${userPrompt}`;
+  const emptyUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
   // ── Gemini ──
   if (config.provider === 'gemini') {
@@ -70,7 +77,12 @@ async function callLLM(config: {
     }
     const data: any = await res.json();
     const parts = data.candidates?.[0]?.content?.parts || [];
-    return parts.map((p: any) => p.text || '').join('\n');
+    const text = parts.map((p: any) => p.text || '').join('\n');
+    const meta = data.usageMetadata;
+    const usage = meta
+      ? { promptTokens: meta.promptTokenCount || 0, completionTokens: meta.candidatesTokenCount || 0, totalTokens: meta.totalTokenCount || 0 }
+      : emptyUsage;
+    return { text, usage };
   }
 
   // ── Anthropic ──
@@ -96,7 +108,12 @@ async function callLLM(config: {
       throw new Error(`Anthropic API error ${res.status}: ${errText}`);
     }
     const data: any = await res.json();
-    return data.content?.[0]?.text || '';
+    const text = data.content?.[0]?.text || '';
+    const u = data.usage;
+    const usage = u
+      ? { promptTokens: u.input_tokens || 0, completionTokens: u.output_tokens || 0, totalTokens: (u.input_tokens || 0) + (u.output_tokens || 0) }
+      : emptyUsage;
+    return { text, usage };
   }
 
   // ── OpenAI-compatible (OpenAI, DeepSeek, Perplexity, Custom) ──
@@ -130,7 +147,12 @@ async function callLLM(config: {
   }
 
   const data: any = await res.json();
-  return data.choices?.[0]?.message?.content || '';
+  const text = data.choices?.[0]?.message?.content || '';
+  const u = data.usage;
+  const usage = u
+    ? { promptTokens: u.prompt_tokens || 0, completionTokens: u.completion_tokens || 0, totalTokens: u.total_tokens || 0 }
+    : emptyUsage;
+  return { text, usage };
 }
 
 // ── 获取提示词模板 ──
@@ -170,6 +192,7 @@ async function processScanJob(job: any) {
 
     let searchContext = '';
     let searchCost = 0;
+    let searchTokens = 0;
 
     // Step 1: 搜索增强 (可选)
     if (enableSearch) {
@@ -181,7 +204,8 @@ async function processScanJob(job: any) {
           searchPrompt || 'You are a crypto market research assistant. Search for the latest market news and events.',
           'Search for the latest cryptocurrency market news, regulatory changes, whale movements, and significant events in the last 24 hours. Output in JSON format with fields: news[], events[], regulatory[].',
         );
-        searchContext = searchResult;
+        searchContext = searchResult.text;
+        searchTokens = searchResult.usage.totalTokens;
 
         // 记录搜索成本
         const costConfig = await db.llmCostConfig.findFirst({
@@ -284,6 +308,7 @@ ${signalListText}
       analyzerPrompt || '你是 Sentinel-X AI 加密市场信号分析引擎。请始终用中文回复，严格按要求的 JSON 格式输出。只报告有真实事件支持的信号触发。',
       analysisInput,
     );
+    const analyzerTokens = analysisResult.usage.totalTokens;
 
     const analyzerCostConfig = await db.llmCostConfig.findFirst({
       where: { provider: analyzerPipeline.provider, model: analyzerPipeline.model },
@@ -291,7 +316,7 @@ ${signalListText}
     const analyzerCost = analyzerCostConfig ? Number(analyzerCostConfig.costPerCall) : 0.005;
 
     // Step 3: 解析结果
-    const briefingData = parseLLMOutput(analysisResult);
+    const briefingData = parseLLMOutput(analysisResult.text);
     briefingData.pipelineInfo = {
       hasSearcher: enableSearch && !!searchContext,
       hasMarketData: false,
@@ -332,7 +357,24 @@ ${signalListText}
       },
     });
 
-    console.log(`[Worker] Scan completed: ${briefingId} (cost: $${totalCost.toFixed(4)}, profit: $${profitUsd.toFixed(4)})`);
+    // Step 6: 更新 SystemScanLog token 统计 (管理员扫描)
+    const totalTokens = searchTokens + analyzerTokens;
+    await db.systemScanLog.updateMany({
+      where: { briefingId },
+      data: {
+        status: 'COMPLETED',
+        tokenCostSearch: searchTokens,
+        tokenCostAnalyze: analyzerTokens,
+        tokenCostTotal: totalTokens,
+        signalCount: briefingData.triggeredSignals?.length ?? 0,
+        alertCount: briefingData.alerts?.length ?? 0,
+        realCostUsd: totalCost,
+        briefingData: briefingData,
+        completedAt: new Date(),
+      },
+    });
+
+    console.log(`[Worker] Scan completed: ${briefingId} (tokens: search=${searchTokens} analyze=${analyzerTokens} total=${totalTokens}, cost: $${totalCost.toFixed(4)}, profit: $${profitUsd.toFixed(4)})`);
   } catch (error: any) {
     console.error(`[Worker] Scan failed: ${briefingId}`, error.message);
 
