@@ -164,7 +164,7 @@ scanRoutes.post('/request', async (c) => {
     const fakeCompletedAt = new Date(fakeStartedAt.getTime() + originalDurationMs);
 
     // 收入 = 用户消耗的 Token / tokenRate (1 USDT = tokenRate Token)
-    const tokenRate = Number(await getSetting('token_to_cny_rate', 10));
+    const tokenRate = Number(await getSetting('token_to_cny_rate', 100000));
     const revenueUsd = tokenRate > 0 ? tokenCost / tokenRate : 0;
 
     await db.scanRecord.create({

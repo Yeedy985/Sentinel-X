@@ -56,7 +56,7 @@ adminRoutes.get('/dashboard', async (c) => {
 
   // 读取汇率: 1 USDT = N Token
   const rateSetting = await db.adminSetting.findUnique({ where: { key: 'token_to_cny_rate' } });
-  const tokenRate = Number(rateSetting?.value ?? 10); // 默认 10
+  const tokenRate = Number(rateSetting?.value ?? 100000); // 默认 100000 (1 USDT = 100000 Token)
 
   // 今日统计
   const todayScans = await db.scanRecord.findMany({

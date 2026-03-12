@@ -363,7 +363,7 @@ ${signalListText}
     const scanRecord = await db.scanRecord.findFirst({ where: { briefingId } });
     const tokenCost = billingMode === 'actual' ? actualTokenCost : (scanRecord?.tokenCost ?? 1);
     // 收入 = 用户消耗的 Token / tokenRate (1 USDT = tokenRate Token)
-    const tokenRate = Number(await getSetting('token_to_cny_rate', 10));
+    const tokenRate = Number(await getSetting('token_to_cny_rate', 100000));
     const revenueUsd = tokenRate > 0 ? tokenCost / tokenRate : 0;
     const profitUsd = revenueUsd - totalCost;
 
