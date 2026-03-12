@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Cpu, Save, Loader2, Trash2, X, Search, Brain, Eye, EyeOff, Shield, Check, AlertTriangle, ChevronRight, Lock, Play, Radio, Clock, ChevronLeft, ChevronDown, Timer, Pause, RotateCcw } from 'lucide-react';
 import { adminApi, isLoggedIn } from '@/lib/api';
@@ -65,6 +65,45 @@ const ROLE_OPTIONS = [
 
 const inputCls = 'w-full px-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 text-[15px] text-white placeholder-slate-500 focus:border-purple-500/70 focus:ring-1 focus:ring-purple-500/20 focus:outline-none transition-all';
 
+// ==================== 全局自动扫描单例 (不随页面切换销毁) ====================
+const _adminAutoScan = {
+  running: false,
+  intervalId: null as ReturnType<typeof setInterval> | null,
+  countdownId: null as ReturnType<typeof setInterval> | null,
+  countdown: 0,
+  totalSec: 0,
+  count: 0,
+  scanFn: null as (() => void) | null,
+  listeners: new Set<() => void>(),
+  notify() { this.listeners.forEach(fn => fn()); },
+  stop() {
+    if (this.intervalId) { clearInterval(this.intervalId); this.intervalId = null; }
+    if (this.countdownId) { clearInterval(this.countdownId); this.countdownId = null; }
+    this.running = false;
+    this.countdown = 0;
+    this.notify();
+  },
+  start(mins: number, scanFn: () => void) {
+    this.stop();
+    this.scanFn = scanFn;
+    this.running = true;
+    this.totalSec = mins * 60;
+    this.countdown = this.totalSec;
+    this.count++;
+    scanFn();
+    this.countdownId = setInterval(() => {
+      this.countdown = this.countdown <= 1 ? this.totalSec : this.countdown - 1;
+      this.notify();
+    }, 1000);
+    this.intervalId = setInterval(() => {
+      this.count++;
+      if (this.scanFn) this.scanFn();
+      this.notify();
+    }, mins * 60 * 1000);
+    this.notify();
+  },
+};
+
 function emptyForm() {
   return { role: 'ANALYZER', provider: 'deepseek', model: 'deepseek-chat', apiUrl: 'https://api.deepseek.com/v1/chat/completions', apiKey: '', priority: 0, enabled: true };
 }
@@ -88,12 +127,10 @@ export default function PipelinesPage() {
   const [expandedLog, setExpandedLog] = useState<number | null>(null);
   const [formCollapsed, setFormCollapsed] = useState(true);
   const [listCollapsed, setListCollapsed] = useState(true);
-  const [autoScanEnabled, setAutoScanEnabled] = useState(false);
+  const [autoScanEnabled, setAutoScanEnabled] = useState(_adminAutoScan.running);
   const [autoScanInterval, setAutoScanInterval] = useState(0);
-  const [autoScanCountdown, setAutoScanCountdown] = useState(0);
-  const [autoScanCount, setAutoScanCount] = useState(0);
-  const autoScanTimerRef = useRef<any>(null);
-  const countdownRef = useRef<any>(null);
+  const [autoScanCountdown, setAutoScanCountdown] = useState(_adminAutoScan.countdown);
+  const [autoScanCount, setAutoScanCount] = useState(_adminAutoScan.count);
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push('/login'); return; }
@@ -110,12 +147,16 @@ export default function PipelinesPage() {
     }
   };
 
-  // Auto-scan cleanup
+  // 同步全局自动扫描状态到组件
   useEffect(() => {
-    return () => {
-      if (autoScanTimerRef.current) clearInterval(autoScanTimerRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
+    const sync = () => {
+      setAutoScanEnabled(_adminAutoScan.running);
+      setAutoScanCountdown(_adminAutoScan.countdown);
+      setAutoScanCount(_adminAutoScan.count);
     };
+    _adminAutoScan.listeners.add(sync);
+    sync();
+    return () => { _adminAutoScan.listeners.delete(sync); };
   }, []);
 
   const load = async () => {
@@ -244,31 +285,19 @@ export default function PipelinesPage() {
 
   const startAutoScan = () => {
     if (autoScanInterval <= 0) return;
-    setAutoScanEnabled(true);
-    setAutoScanCountdown(autoScanInterval * 60);
-    // Trigger first scan immediately
-    handleTriggerScan(true);
-    setAutoScanCount(prev => prev + 1);
-    // Start countdown
-    countdownRef.current = setInterval(() => {
-      setAutoScanCountdown(prev => {
-        if (prev <= 1) return autoScanInterval * 60;
-        return prev - 1;
-      });
-    }, 1000);
-    // Start periodic scan
-    autoScanTimerRef.current = setInterval(() => {
-      handleTriggerScan(true);
-      setAutoScanCount(prev => prev + 1);
-    }, autoScanInterval * 60 * 1000);
+    _adminAutoScan.start(autoScanInterval, () => handleTriggerScan(true));
   };
 
   const stopAutoScan = () => {
-    setAutoScanEnabled(false);
-    if (autoScanTimerRef.current) { clearInterval(autoScanTimerRef.current); autoScanTimerRef.current = null; }
-    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
-    setAutoScanCountdown(0);
+    _adminAutoScan.stop();
   };
+
+  // 保持 scanFn 指向最新的 handleTriggerScan
+  useEffect(() => {
+    if (_adminAutoScan.running) {
+      _adminAutoScan.scanFn = () => handleTriggerScan(true);
+    }
+  });
 
   const formatCountdown = (seconds: number) => {
     const m = Math.floor(seconds / 60);
