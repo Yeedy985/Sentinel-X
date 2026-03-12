@@ -255,7 +255,7 @@ userRoutes.post('/recharge', async (c) => {
     // 用 FOR UPDATE SKIP LOCKED 原子抢占一个空闲地址
     const rows: any[] = await tx.$queryRaw`
       SELECT id, address FROM "payment_addresses"
-      WHERE network = ${network} AND status = 'IDLE'
+      WHERE network = ${network}::"PaymentNetwork" AND status = 'IDLE'::"AddressStatus"
       ORDER BY id ASC
       LIMIT 1
       FOR UPDATE SKIP LOCKED
