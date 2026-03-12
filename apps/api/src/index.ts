@@ -17,6 +17,7 @@ import { scanRoutes } from './routes/scan';
 import { adminRoutes } from './routes/admin';
 import { SERVICE_VERSION } from '@sentinel/shared';
 import { startScanWorker } from './worker/scanWorker';
+import { startRechargeScanner } from './worker/rechargeScanner';
 
 const app = new Hono();
 
@@ -51,6 +52,7 @@ app.route('/api/admin', adminRoutes);
 
 // ── 启动 Worker ──
 startScanWorker();
+startRechargeScanner();
 
 // ── 启动 HTTP ──
 const port = Number(process.env.PORT) || 3001;

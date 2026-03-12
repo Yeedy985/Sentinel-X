@@ -235,9 +235,8 @@ userRoutes.post('/recharge', async (c) => {
   // 先解锁过期地址
   await unlockExpiredPaymentAddresses();
 
-  // 从数据库分配一个空闲地址，锁定10分钟
-  const LOCK_MINUTES = 10;
-  const lockExpiresAt = new Date(Date.now() + LOCK_MINUTES * 60 * 1000);
+  // 从数据库分配一个空闲地址，锁定时间与订单有效期一致
+  const lockExpiresAt = new Date(Date.now() + RECHARGE_EXPIRY_MINUTES * 60 * 1000);
 
   // 创建充值记录
   const record = await db.rechargeRecord.create({
