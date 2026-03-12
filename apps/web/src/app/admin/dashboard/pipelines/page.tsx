@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Cpu, Save, Loader2, Trash2, X, Search, Brain, Eye, EyeOff, Shield, Check, AlertTriangle, ChevronRight, Lock, Play, Radio, Clock, ChevronLeft, ChevronDown, Timer, Pause, RotateCcw } from 'lucide-react';
 import { adminApi, isLoggedIn } from '@/lib/adminApi';
@@ -92,8 +92,10 @@ export default function PipelinesPage() {
   const [autoScanInterval, setAutoScanInterval] = useState(0);
   const [autoScanCountdown, setAutoScanCountdown] = useState(0);
   const [autoScanCount, setAutoScanCount] = useState(0);
-  const autoScanTimerRef = useRef<any>(null);
-  const countdownRef = useRef<any>(null);
+  const [autoScanStartedAt, setAutoScanStartedAt] = useState(0);
+  const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scanFnRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     if (!isLoggedIn()) { router.push('/login'); return; }
@@ -107,16 +109,15 @@ export default function PipelinesPage() {
     if (res.success && res.data) {
       const mins = Number(res.data.auto_scan_interval_minutes) || 0;
       setAutoScanInterval(mins);
+      // 从 DB 恢复自动扫描状态
+      const running = !!res.data.auto_scan_running;
+      const startedAt = Number(res.data.auto_scan_started_at) || 0;
+      if (running && mins > 0 && startedAt > 0) {
+        setAutoScanStartedAt(startedAt);
+        setTimeout(() => _boot(mins, startedAt, 0, false), 0);
+      }
     }
   };
-
-  // Auto-scan cleanup
-  useEffect(() => {
-    return () => {
-      if (autoScanTimerRef.current) clearInterval(autoScanTimerRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    };
-  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -242,33 +243,65 @@ export default function PipelinesPage() {
     }, 300000);
   };
 
-  const startAutoScan = () => {
-    if (autoScanInterval <= 0) return;
-    setAutoScanEnabled(true);
-    setAutoScanCountdown(autoScanInterval * 60);
-    // Trigger first scan immediately
-    handleTriggerScan(true);
-    setAutoScanCount(prev => prev + 1);
-    // Start countdown
-    countdownRef.current = setInterval(() => {
-      setAutoScanCountdown(prev => {
-        if (prev <= 1) return autoScanInterval * 60;
-        return prev - 1;
-      });
-    }, 1000);
-    // Start periodic scan
-    autoScanTimerRef.current = setInterval(() => {
-      handleTriggerScan(true);
-      setAutoScanCount(prev => prev + 1);
-    }, autoScanInterval * 60 * 1000);
+  // 始终保持 scanFnRef 指向最新的 handleTriggerScan
+  scanFnRef.current = () => handleTriggerScan(true);
+
+  const clearTimers = () => {
+    if (scanTimerRef.current) { clearInterval(scanTimerRef.current); scanTimerRef.current = null; }
+    if (countdownTimerRef.current) { clearInterval(countdownTimerRef.current); countdownTimerRef.current = null; }
   };
 
-  const stopAutoScan = () => {
-    setAutoScanEnabled(false);
-    if (autoScanTimerRef.current) { clearInterval(autoScanTimerRef.current); autoScanTimerRef.current = null; }
-    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
-    setAutoScanCountdown(0);
+  const _boot = (mins: number, startedAt: number, count: number, triggerNow: boolean) => {
+    clearTimers();
+    const totalSec = mins * 60;
+    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+    const cycleElapsed = elapsed % totalSec;
+    const remaining = totalSec - cycleElapsed;
+
+    setAutoScanEnabled(true);
+    setAutoScanCountdown(remaining);
+    setAutoScanCount(count);
+
+    if (triggerNow) scanFnRef.current();
+
+    countdownTimerRef.current = setInterval(() => {
+      setAutoScanCountdown(prev => prev <= 1 ? totalSec : prev - 1);
+    }, 1000);
+    scanTimerRef.current = setInterval(() => {
+      setAutoScanCount(prev => prev + 1);
+      scanFnRef.current();
+    }, totalSec * 1000);
   };
+
+  const startAutoScan = async () => {
+    if (autoScanInterval <= 0) return;
+    const now = Date.now();
+    await Promise.all([
+      adminApi.updateSetting('auto_scan_running', true),
+      adminApi.updateSetting('auto_scan_started_at', now),
+    ]);
+    setAutoScanStartedAt(now);
+    _boot(autoScanInterval, now, 1, true);
+  };
+
+  const stopAutoScan = async () => {
+    clearTimers();
+    setAutoScanEnabled(false);
+    setAutoScanCountdown(0);
+    setAutoScanStartedAt(0);
+    await Promise.all([
+      adminApi.updateSetting('auto_scan_running', false),
+      adminApi.updateSetting('auto_scan_started_at', 0),
+    ]);
+  };
+
+  // 组件卸载时仅清理 interval，不改 DB，下次挂载从 DB 恢复
+  useEffect(() => {
+    return () => {
+      if (scanTimerRef.current) clearInterval(scanTimerRef.current);
+      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+    };
+  }, []);
 
   const formatCountdown = (seconds: number) => {
     const m = Math.floor(seconds / 60);
