@@ -325,93 +325,12 @@ userRoutes.get('/recharges', async (c) => {
   });
 });
 
-// ── 确认充值到账 (开发/模拟用，生产环境需区块链回调替代) ──
+// ── 确认充值到账 (已禁用用户端操作，由管理员后台确认) ──
 userRoutes.post('/recharge/:id/confirm', async (c) => {
-  const userId = c.get('userId');
-  const rechargeId = Number(c.req.param('id'));
-  const body = await c.req.json<{ txRef?: string }>().catch(() => ({}));
-
-  const record = await db.rechargeRecord.findFirst({
-    where: { id: rechargeId, userId, status: 'PENDING' },
-  });
-  if (!record) {
-    return c.json<ApiResponse>({ success: false, error: '充值订单不存在或已处理' }, 404);
-  }
-
-  await db.rechargeRecord.update({
-    where: { id: rechargeId },
-    data: {
-      status: 'COMPLETED',
-      txRef: (body as any)?.txRef || `manual_${Date.now()}`,
-    },
-  });
-
-  return c.json<ApiResponse>({ success: true, message: '充值已确认，请兑换Token' });
+  return c.json<ApiResponse>({ success: false, error: '充值确认需由管理员审核，请耐心等待' }, 403);
 });
 
-// ── USDT 充值兑换为 Token ──
+// ── USDT 充值兑换为 Token (已禁用用户端操作，由管理员后台确认后自动兑换) ──
 userRoutes.post('/exchange', async (c) => {
-  const userId = c.get('userId');
-  const body = await c.req.json<{ rechargeId: number }>().catch(() => ({ rechargeId: 0 }));
-  const rechargeId = Number(body.rechargeId);
-
-  if (!rechargeId) {
-    return c.json<ApiResponse>({ success: false, error: '请提供充值订单ID' }, 400);
-  }
-
-  const record = await db.rechargeRecord.findFirst({
-    where: { id: rechargeId, userId, status: 'COMPLETED', method: 'USDT' },
-  });
-  if (!record) {
-    return c.json<ApiResponse>({ success: false, error: '充值订单不存在、未完成或已兑换' }, 404);
-  }
-
-  // 检查是否已兑换 (通过 note 中 "已兑换" 标记)
-  if (record.note?.includes('已兑换')) {
-    return c.json<ApiResponse>({ success: false, error: '此订单已兑换过Token' }, 400);
-  }
-
-  const usdtAmount = Number(record.amount) / 100; // 分→元
-  const dynamicRate = Number(await getSetting('token_to_cny_rate', USDT_TO_TOKEN_RATE));
-  const tokensToGrant = Math.floor(usdtAmount * dynamicRate);
-
-  if (tokensToGrant <= 0) {
-    return c.json<ApiResponse>({ success: false, error: '充值金额过小，无法兑换' }, 400);
-  }
-
-  // 事务: 标记已兑换 + 增加余额 + 写流水
-  const result = await db.$transaction(async (tx) => {
-    await tx.rechargeRecord.update({
-      where: { id: rechargeId },
-      data: { note: `${record.note || ''} | 已兑换 ${tokensToGrant} Token` },
-    });
-
-    const user = await tx.user.update({
-      where: { id: userId },
-      data: { tokenBalance: { increment: BigInt(tokensToGrant) } },
-    });
-
-    await tx.tokenTransaction.create({
-      data: {
-        userId,
-        type: 'RECHARGE',
-        amount: BigInt(tokensToGrant),
-        balanceAfter: user.tokenBalance,
-        refId: `recharge_${rechargeId}`,
-        description: `USDT充值兑换 ${usdtAmount} USDT → ${tokensToGrant} Token (费率: 1 USDT = ${dynamicRate} Token)`,
-      },
-    });
-
-    return { tokensGranted: tokensToGrant, newBalance: Number(user.tokenBalance) };
-  });
-
-  return c.json<ApiResponse<ExchangeResponse>>({
-    success: true,
-    data: {
-      tokensGranted: result.tokensGranted,
-      newBalance: result.newBalance,
-      rate: dynamicRate,
-    },
-    message: `成功兑换 ${result.tokensGranted} Token`,
-  });
+  return c.json<ApiResponse>({ success: false, error: '充值兑换需由管理员审核确认，请耐心等待' }, 403);
 });

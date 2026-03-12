@@ -861,6 +861,143 @@ adminRoutes.get('/trigger-scan/:briefingId', async (c) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// ── 充值订单管理 (管理员审核) ──
+// ══════════════════════════════════════════════════════════════
+
+// ── 获取充值订单列表 ──
+adminRoutes.get('/recharges', async (c) => {
+  const status = c.req.query('status') || undefined; // PENDING / COMPLETED / FAILED
+  const page = Math.max(1, Number(c.req.query('page')) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(c.req.query('pageSize')) || 50));
+  const where: any = {};
+  if (status) where.status = status;
+
+  const [total, records] = await Promise.all([
+    db.rechargeRecord.count({ where }),
+    db.rechargeRecord.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: { user: { select: { id: true, email: true, nickname: true } } },
+    }),
+  ]);
+
+  return c.json<ApiResponse>({
+    success: true,
+    data: {
+      data: records.map(r => ({
+        id: r.id,
+        userId: r.userId,
+        userEmail: r.user.email,
+        userNickname: r.user.nickname,
+        amount: Number(r.amount) / 100,
+        method: r.method,
+        txRef: r.txRef,
+        status: r.status,
+        note: r.note,
+        createdAt: r.createdAt.toISOString(),
+      })),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  });
+});
+
+// ── 管理员确认充值到账 + 自动兑换Token ──
+adminRoutes.post('/recharges/:id/approve', async (c) => {
+  const rechargeId = Number(c.req.param('id'));
+  const body = await c.req.json<{ txRef?: string }>().catch(() => ({}));
+
+  const record = await db.rechargeRecord.findFirst({
+    where: { id: rechargeId, status: 'PENDING' },
+  });
+  if (!record) {
+    return c.json<ApiResponse>({ success: false, error: '订单不存在或已处理' }, 404);
+  }
+
+  const usdtAmount = Number(record.amount) / 100;
+
+  // 读取动态汇率
+  const rateSetting = await db.adminSetting.findUnique({ where: { key: 'token_to_cny_rate' } });
+  const dynamicRate = Number(rateSetting?.value ?? 10);
+  const tokensToGrant = Math.floor(usdtAmount * dynamicRate);
+
+  if (tokensToGrant <= 0) {
+    return c.json<ApiResponse>({ success: false, error: '充值金额过小，无法兑换' }, 400);
+  }
+
+  // 事务: 确认到账 + 标记已兑换 + 增加余额 + 写流水
+  const result = await db.$transaction(async (tx) => {
+    await tx.rechargeRecord.update({
+      where: { id: rechargeId },
+      data: {
+        status: 'COMPLETED',
+        txRef: (body as any)?.txRef || `admin_approve_${Date.now()}`,
+        note: `${record.note || ''} | 管理员已审核 | 已兑换 ${tokensToGrant} Token`,
+      },
+    });
+
+    const user = await tx.user.update({
+      where: { id: record.userId },
+      data: { tokenBalance: { increment: BigInt(tokensToGrant) } },
+    });
+
+    await tx.tokenTransaction.create({
+      data: {
+        userId: record.userId,
+        type: 'RECHARGE',
+        amount: BigInt(tokensToGrant),
+        balanceAfter: user.tokenBalance,
+        refId: `recharge_${rechargeId}`,
+        description: `管理员审核通过: ${usdtAmount} USDT → ${tokensToGrant} Token (费率: 1:${dynamicRate})`,
+      },
+    });
+
+    return { tokensGranted: tokensToGrant, newBalance: Number(user.tokenBalance) };
+  });
+
+  return c.json<ApiResponse>({
+    success: true,
+    data: result,
+    message: `已确认并兑换 ${result.tokensGranted} Token 给用户`,
+  });
+});
+
+// ── 管理员拒绝充值订单 ──
+adminRoutes.post('/recharges/:id/reject', async (c) => {
+  const rechargeId = Number(c.req.param('id'));
+  const body = await c.req.json<{ reason?: string }>().catch(() => ({}));
+
+  const record = await db.rechargeRecord.findFirst({
+    where: { id: rechargeId, status: 'PENDING' },
+  });
+  if (!record) {
+    return c.json<ApiResponse>({ success: false, error: '订单不存在或已处理' }, 404);
+  }
+
+  await db.rechargeRecord.update({
+    where: { id: rechargeId },
+    data: {
+      status: 'FAILED',
+      note: `${record.note || ''} | 管理员拒绝: ${(body as any)?.reason || '未通过审核'}`,
+    },
+  });
+
+  // 解锁关联的收款地址
+  try {
+    await db.paymentAddress.updateMany({
+      where: { lockedOrderId: rechargeId },
+      data: { status: 'IDLE', lockedByUser: null, lockedOrderId: null, lockExpiresAt: null },
+    });
+  } catch {}
+
+  return c.json<ApiResponse>({ success: true, message: '已拒绝该充值订单' });
+});
+
+// ══════════════════════════════════════════════════════════════
 // ── 收款地址管理 ──
 // ══════════════════════════════════════════════════════════════
 

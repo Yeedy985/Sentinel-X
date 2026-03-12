@@ -304,6 +304,12 @@ export const adminApi = {
     request(`/api/admin/admins/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteAdmin: (id: number) =>
     request(`/api/admin/admins/${id}`, { method: 'DELETE' }),
+  getRecharges: (page = 1, status?: string) =>
+    request(`/api/admin/recharges?page=${page}${status ? `&status=${status}` : ''}`),
+  approveRecharge: (id: number, txRef?: string) =>
+    request(`/api/admin/recharges/${id}/approve`, { method: 'POST', body: JSON.stringify({ txRef }) }),
+  rejectRecharge: (id: number, reason?: string) =>
+    request(`/api/admin/recharges/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
   getPaymentAddresses: (network?: string) =>
     request(`/api/admin/payment-addresses${network ? `?network=${network}` : ''}`),
   importPaymentAddresses: (network: string, addresses: string[]) =>

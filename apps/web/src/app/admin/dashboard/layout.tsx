@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Shield, Users, BarChart3, Cpu, DollarSign, Settings, TrendingUp, LogOut, Zap, Wallet } from 'lucide-react';
+import { Shield, Users, BarChart3, Cpu, DollarSign, Settings, TrendingUp, LogOut, Zap, Wallet, ClipboardCheck } from 'lucide-react';
 import { clearToken, isLoggedIn } from '@/lib/adminApi';
 import { useEffect } from 'react';
 
@@ -13,6 +13,7 @@ const navItems = [
   { href: '/admin/dashboard/costs', label: '计费配置', icon: DollarSign, color: 'text-amber-400' },
   { href: '/admin/dashboard/users', label: '用户管理', icon: Users, color: 'text-cyan-400' },
   { href: '/admin/dashboard/finance', label: '财务报表', icon: TrendingUp, color: 'text-emerald-400' },
+  { href: '/admin/dashboard/recharges', label: '充值审核', icon: ClipboardCheck, color: 'text-amber-400' },
   { href: '/admin/dashboard/addresses', label: '收款地址', icon: Wallet, color: 'text-indigo-400' },
   { href: '/admin/dashboard/settings', label: '系统设置', icon: Settings, color: 'text-slate-400' },
 ];

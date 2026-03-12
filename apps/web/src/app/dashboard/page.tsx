@@ -489,27 +489,27 @@ export default function DashboardPage() {
                     <div className="flex justify-between"><span className="text-slate-500">有效期至</span><span className="text-slate-300">{new Date(rechargeOrder.expiresAt).toLocaleString('zh-CN')}</span></div>
                   </div>
 
-                  {/* Actions */}
+                  {/* Status Info */}
                   {rechargeOrder.status === 'PENDING' && (
-                    <button
-                      onClick={() => handleConfirmPayment(rechargeOrder.id)}
-                      disabled={rechargeLoading}
-                      className="w-full py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-40 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/15"
-                    >
-                      {rechargeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                      我已支付
-                    </button>
+                    <div className="p-4 rounded-xl bg-cyan-500/[0.06] border border-cyan-500/15 text-center space-y-2">
+                      <div className="flex items-center justify-center gap-2 text-cyan-400 text-sm font-semibold">
+                        <Clock className="w-4 h-4 animate-pulse" />
+                        等待管理员确认到账
+                      </div>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        请完成链上转账后耐心等待，管理员确认到账后将自动为您充值 Token
+                      </p>
+                    </div>
                   )}
 
                   {rechargeOrder.status === 'COMPLETED' && (
-                    <button
-                      onClick={() => handleExchange(rechargeOrder.id)}
-                      disabled={exchangeLoading === rechargeOrder.id}
-                      className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-40 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/15"
-                    >
-                      {exchangeLoading === rechargeOrder.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRightLeft className="w-4 h-4" />}
-                      兑换 {rechargeOrder.usdtAmount * usdtRate} Token
-                    </button>
+                    <div className="p-4 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/15 text-center space-y-2">
+                      <div className="flex items-center justify-center gap-2 text-emerald-400 text-sm font-semibold">
+                        <CheckCircle2 className="w-4 h-4" />
+                        充值已完成
+                      </div>
+                      <p className="text-xs text-slate-500">Token 已到账，请刷新页面查看余额</p>
+                    </div>
                   )}
                 </div>
               ) : (
