@@ -240,7 +240,7 @@ export default function DashboardPage() {
               <Coins className="w-3.5 h-3.5" />Token 余额
             </div>
             <div className="text-4xl font-extrabold text-amber-400 tracking-tight tabular-nums">{profile?.tokenBalance ?? 0}</div>
-            <div className="text-[11px] text-slate-500 mt-2">1 Token = 1次基础扫描</div>
+            <div className="text-[11px] text-slate-500 mt-2">可用于扫描服务</div>
           </div>
           <div className="group relative p-5 rounded-2xl bg-gradient-to-br from-cyan-500/[0.08] to-blue-600/[0.04] border border-cyan-500/15 hover:border-cyan-500/25 transition-all duration-300">
             <div className="flex items-center gap-2 text-xs font-medium text-cyan-400/60 mb-3 tracking-wide uppercase">
@@ -470,16 +470,6 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* Token Usage Info */}
-              <div className="p-5 rounded-2xl bg-white/[0.015] border border-white/[0.04]">
-                <h4 className="text-[11px] font-semibold text-slate-400 mb-3 uppercase tracking-wider">Token 用途</h4>
-                <div className="space-y-2.5 text-xs">
-                  <div className="flex justify-between items-center"><span className="text-slate-500">基础扫描 (无搜索增强)</span><span className="text-slate-300 font-semibold">1 Token/次</span></div>
-                  <div className="flex justify-between items-center"><span className="text-slate-500">搜索增强扫描</span><span className="text-slate-300 font-semibold">2 Token/次</span></div>
-                  <div className="h-px bg-white/[0.04]" />
-                  <div className="flex justify-between items-center"><span className="text-slate-500">扫描结果有效期</span><span className="text-slate-300 font-semibold">5 分钟</span></div>
-                </div>
-              </div>
             </div>
           </div>
         )}

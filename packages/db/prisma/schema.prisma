@@ -37,8 +37,9 @@ enum UserStatus {
 model ApiToken {
   id          Int       @id @default(autoincrement())
   userId      Int       @map("user_id")
-  tokenHash   String    @map("token_hash") @db.VarChar(255)
-  tokenPrefix String    @map("token_prefix") @db.VarChar(12)
+  tokenHash      String    @map("token_hash") @db.VarChar(255)
+  tokenPrefix    String    @map("token_prefix") @db.VarChar(12)
+  tokenEncrypted String?   @map("token_encrypted") @db.Text
   name        String?   @db.VarChar(100)
   lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
   isRevoked   Boolean   @default(false) @map("is_revoked")
