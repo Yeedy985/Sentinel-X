@@ -368,73 +368,48 @@ adminRoutes.get('/finance', async (c) => {
   });
 });
 
-// ── 系统扫描记录 (管理后台自动扫描) ──
+// ── 系统扫描记录 (所有扫描: 管理员触发 + 用户API调用) ──
 adminRoutes.get('/system-scans', async (c) => {
   const page = Math.max(1, Number(c.req.query('page')) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(c.req.query('pageSize')) || 20));
 
-  const [total, logs] = await Promise.all([
-    db.systemScanLog.count(),
-    db.systemScanLog.findMany({
+  const [total, records] = await Promise.all([
+    db.scanRecord.count(),
+    db.scanRecord.findMany({
       orderBy: { startedAt: 'desc' },
       skip: (page - 1) * pageSize,
       take: pageSize,
+      include: {
+        user: { select: { email: true, nickname: true } },
+      },
     }),
   ]);
-
-  // 同步：对还没完成的 SystemScanLog，从 scanRecord 读取最新状态
-  const briefingIds = logs.filter((l: any) => l.status === 'PENDING' || l.status === 'PROCESSING').map((l: any) => l.briefingId);
-  if (briefingIds.length > 0) {
-    const records = await db.scanRecord.findMany({ where: { briefingId: { in: briefingIds } } });
-    const recordMap = new Map(records.map((r: any) => [r.briefingId, r]));
-    for (const log of logs) {
-      const rec = recordMap.get(log.briefingId);
-      if (rec && (rec.status === 'COMPLETED' || rec.status === 'FAILED')) {
-        await db.systemScanLog.update({
-          where: { briefingId: log.briefingId },
-          data: {
-            status: rec.status as any,
-            signalCount: rec.signalCount,
-            alertCount: rec.alertCount,
-            realCostUsd: rec.realCostUsd,
-            completedAt: rec.completedAt,
-            briefingData: rec.briefingData as any,
-            errorMessage: rec.status === 'FAILED' ? 'Scan failed' : null,
-          },
-        });
-        // 更新内存中的对象
-        (log as any).status = rec.status;
-        (log as any).signalCount = rec.signalCount;
-        (log as any).alertCount = rec.alertCount;
-        (log as any).realCostUsd = rec.realCostUsd;
-        (log as any).completedAt = rec.completedAt;
-        (log as any).errorMessage = rec.status === 'FAILED' ? 'Scan failed' : null;
-      }
-    }
-  }
 
   return c.json<ApiResponse>({
     success: true,
     data: {
-      data: logs.map((l: any) => ({
-        id: l.id,
-        briefingId: l.briefingId,
-        status: l.status,
-        enableSearch: l.enableSearch,
-        signalCount: l.signalCount,
-        alertCount: l.alertCount,
-        tokenCostSearch: l.tokenCostSearch,
-        tokenCostAnalyze: l.tokenCostAnalyze,
-        tokenCostTotal: l.tokenCostTotal,
-        realCostUsd: Number(l.realCostUsd),
-        searcherProvider: l.searcherProvider,
-        searcherModel: l.searcherModel,
-        analyzerProvider: l.analyzerProvider,
-        analyzerModel: l.analyzerModel,
-        errorMessage: l.errorMessage,
-        briefingData: l.briefingData || null,
-        startedAt: l.startedAt.toISOString(),
-        completedAt: l.completedAt?.toISOString() || null,
+      data: records.map((r: any) => ({
+        id: r.id,
+        briefingId: r.briefingId,
+        status: r.status,
+        enableSearch: r.enableSearch,
+        isCached: r.isCached,
+        signalCount: r.signalCount,
+        alertCount: r.alertCount,
+        tokenCostSearch: 0,
+        tokenCostAnalyze: 0,
+        tokenCostTotal: r.tokenCost,
+        realCostUsd: Number(r.realCostUsd),
+        searcherProvider: r.searcherProvider,
+        searcherModel: r.searcherModel,
+        analyzerProvider: r.analyzerProvider,
+        analyzerModel: r.analyzerModel,
+        errorMessage: r.errorMessage,
+        briefingData: r.briefingData || null,
+        userEmail: r.user?.email,
+        userNickname: r.user?.nickname,
+        startedAt: r.startedAt.toISOString(),
+        completedAt: r.completedAt?.toISOString() || null,
       })),
       total,
       page,
