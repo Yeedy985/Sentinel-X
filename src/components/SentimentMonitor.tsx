@@ -315,6 +315,11 @@ function saveReportModeSettings(s: ReportModeSettings) {
   localStorage.setItem(REPORT_MODE_KEY, JSON.stringify(s));
 }
 
+// ==================== SSE → 主组件 回调桥 ====================
+// 子组件 PublicServiceConfigPanel 的 SSE 收到 briefing 后，
+// 通过这个桥通知主组件做完整处理 (评分+UI更新+通知)
+let _onSSEBriefing: ((briefing: ScanBriefing) => Promise<void>) | null = null;
+
 // ==================== 独立扫描函数 (不依赖 React 组件, 可在任何页面后台执行) ====================
 let _bgScanning = false;
 let _bgAborted = false;
@@ -714,9 +719,15 @@ function PublicServiceConfigPanel() {
     const disconnect = connectSSE(
       activeConfig,
       async (briefing) => {
-        await saveBriefing(briefing);
-        if (activeConfig.notifyEnabled && briefing.alerts.length > 0) {
-          await notifyBriefing(briefing);
+        // 通过桥通知主组件做完整处理 (评分+UI更新+通知)
+        if (_onSSEBriefing) {
+          await _onSSEBriefing(briefing);
+        } else {
+          // 兜底: 桥未注册时至少保存到DB
+          await saveBriefing(briefing);
+          if (activeConfig.notifyEnabled && briefing.alerts.length > 0) {
+            await notifyBriefing(briefing);
+          }
         }
       },
       (status) => {
@@ -1926,6 +1937,91 @@ export default function SentimentMonitor() {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ===== 公共服务简报完整处理 (共享函数，供正常流程/超时补偿/SSE 回调使用) =====
+  const processBriefingResult = useCallback(async (briefing: ScanBriefing, source: string) => {
+    try {
+      const scanTimestamp = briefing.completedAt ? new Date(briefing.completedAt).getTime() : briefing.timestamp;
+      const saved = await saveBriefing(briefing, scanTimestamp);
+      setMarketSummary(briefing.marketSummary);
+      setNewAlerts(saved.alerts);
+      setPipelineResult(briefing.pipelineInfo);
+
+      const config = (await db.publicServiceConfigs.filter(c => c.enabled).toArray())[0];
+      if (config?.notifyEnabled && briefing.alerts.length > 0) {
+        await notifyBriefing(briefing);
+      }
+
+      const allEvents = await db.signalEvents.toArray();
+      const result = SentinelScoringEngine.calculateScores(allEvents);
+      result.timestamp = scanTimestamp;
+      result.scanMode = 'public-service';
+      if (briefing.serverTokenUsage) result.serverTokenUsage = briefing.serverTokenUsage;
+      if (briefing.startedAt) result.serverStartedAt = briefing.startedAt;
+      if (briefing.completedAt) result.serverCompletedAt = briefing.completedAt;
+      setScores(result);
+      setGridParams(SentinelScoringEngine.mapToGridParams(result));
+      await db.scoringResults.add(result);
+      evaluateAfterScan(result).catch(e => console.warn(`[${source}] 状态机评估失败:`, e.message));
+      notifyScanResult(briefing, result).catch((err: any) => console.warn(`[${source}] 推送失败:`, err));
+
+      setError('');
+      const elapsed = scanStartRef.current ? Math.round((Date.now() - scanStartRef.current) / 1000) : 0;
+      setScanResult({ success: true, signalCount: saved.events.length, alertCount: saved.alerts.length, elapsed });
+      console.log(`[${source}] 简报处理完成, ${saved.events.length} 信号, ${saved.alerts.length} 预警`);
+    } catch (e: any) {
+      console.warn(`[${source}] 简报处理失败:`, e.message);
+    }
+  }, []);
+
+  // 超时后后台补偿轮询引用 (用于清理)
+  const recoveryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 注册 SSE 回调桥: 子组件 SSE 收到 briefing 时，主组件做完整处理
+  useEffect(() => {
+    _onSSEBriefing = (briefing: ScanBriefing) => processBriefingResult(briefing, 'SSE');
+    return () => {
+      _onSSEBriefing = null;
+      if (recoveryTimerRef.current) clearTimeout(recoveryTimerRef.current);
+    };
+  }, [processBriefingResult]);
+
+  /**
+   * 超时后启动后台补偿轮询:
+   * 每 5s 查一次，最多再等 5 分钟，一旦拿到 briefing 就完整处理并更新 UI
+   */
+  const startRecoveryPoll = useCallback((briefingId: string) => {
+    if (recoveryTimerRef.current) clearTimeout(recoveryTimerRef.current);
+
+    const maxRecovery = 5 * 60 * 1000; // 5 min
+    const startTime = Date.now();
+    console.log(`[Recovery] 启动后台补偿轮询 briefingId=${briefingId}, 最多等待 ${maxRecovery / 1000}s`);
+
+    const poll = async () => {
+      if (Date.now() - startTime > maxRecovery) {
+        console.warn('[Recovery] 补偿轮询超时，放弃');
+        setError(prev => prev.includes('扫描超时') ? prev + ' (补偿轮询也已超时)' : prev);
+        return;
+      }
+      try {
+        const config = (await db.publicServiceConfigs.filter(c => c.enabled).toArray())[0];
+        if (!config) return;
+        const briefings = await fetchLatestBriefings(config, 10);
+        const match = briefings.find(b => b.briefingId === briefingId);
+        if (match) {
+          console.log(`[Recovery] 补偿轮询成功，收到 briefing ${briefingId}`);
+          await processBriefingResult(match, 'Recovery');
+          return; // 成功，不再轮询
+        }
+      } catch (e: any) {
+        console.warn('[Recovery] 补偿轮询请求失败:', e.message);
+      }
+      // 继续轮询
+      recoveryTimerRef.current = setTimeout(poll, 5000);
+    };
+
+    recoveryTimerRef.current = setTimeout(poll, 5000);
+  }, [processBriefingResult]);
+
   // ===== 自建模式: 本地 LLM 扫描 =====
   const handleSelfHostedScan = useCallback(async () => {
     if (analyzingRef.current) return; // 防重复
@@ -2079,47 +2175,22 @@ export default function SentimentMonitor() {
       }
 
       if (!briefing) {
-        setError(`扫描超时 (等待${Math.round(maxWait/1000)}s)，简报可能稍后通过 SSE 推送到达`);
+        setError(`扫描超时 (等待${Math.round(maxWait/1000)}s)，后台继续等待结果...`);
+        startRecoveryPoll(briefingId);
         analyzingRef.current = false;
         setAnalyzing(false);
         setProgress(null);
         return;
       }
 
-      // 保存并处理简报 (使用服务端真实完成时间作为时间戳)
-      const scanTimestamp = briefing.completedAt ? new Date(briefing.completedAt).getTime() : briefing.timestamp;
-      const saved = await saveBriefing(briefing, scanTimestamp);
-      setMarketSummary(briefing.marketSummary);
-      setNewAlerts(saved.alerts);
-      setPipelineResult(briefing.pipelineInfo);
-
-      // 自动通知
-      if (config.notifyEnabled && briefing.alerts.length > 0) {
-        await notifyBriefing(briefing);
-      }
-
-      // 重算评分 (使用服务端真实完成时间作为时间戳)
-      const allEvents = await db.signalEvents.toArray();
-      const result = SentinelScoringEngine.calculateScores(allEvents);
-      result.timestamp = scanTimestamp;
-      result.scanMode = 'public-service';
-      if (briefing.serverTokenUsage) result.serverTokenUsage = briefing.serverTokenUsage;
-      if (briefing.startedAt) result.serverStartedAt = briefing.startedAt;
-      if (briefing.completedAt) result.serverCompletedAt = briefing.completedAt;
-      setScores(result);
-      setGridParams(SentinelScoringEngine.mapToGridParams(result));
-      await db.scoringResults.add(result);
-      evaluateAfterScan(result).catch(e => console.warn('[公共扫描] 状态机评估失败:', e.message));
-
-      // 推送扫描结果到用户配置的通知渠道
-      notifyScanResult(briefing, result).catch((err: any) => console.warn('推送扫描结果失败:', err));
+      await processBriefingResult(briefing, '公共扫描');
     } catch (err: any) {
       setError(`公共服务扫描失败: ${err.message}`);
     }
     analyzingRef.current = false;
     setAnalyzing(false);
     setProgress(null);
-  }, []);
+  }, [processBriefingResult, startRecoveryPoll]);
 
   const handleScan = scanMode === 'self-hosted' ? handleSelfHostedScan : handlePublicScan;
 
