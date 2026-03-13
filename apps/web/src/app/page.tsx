@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
-import { Shield, Zap, Brain, BarChart3, Grid3X3, Lock, Coins, ArrowRight, ChevronRight } from 'lucide-react';
+import { Brain, Grid3X3, Lock, ArrowRight, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
+import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
 
 function useSiteConfig() {
   const [bonusTokens, setBonusTokens] = useState<number | null>(null);
@@ -81,23 +83,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
-      {/* ───── Nav ───── */}
-      <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-slate-950/70 backdrop-blur-2xl">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Shield className="w-5 h-5 text-cyan-400" />
-            <span className="font-bold tracking-tight">AlphaSentinel</span>
-          </Link>
-          <div className="flex items-center gap-1">
-            <Link href="/grid" className="px-3 py-1.5 text-sm text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-white/5">网格量化</Link>
-            <Link href="/pricing" className="px-3 py-1.5 text-sm text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-white/5">AI 扫描</Link>
-            <Link href="/docs" className="px-3 py-1.5 text-sm text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-white/5">API 文档</Link>
-            <div className="w-px h-5 bg-white/10 mx-2" />
-            <Link href="/login" className="px-3 py-1.5 text-sm text-slate-400 hover:text-white transition-colors">登录</Link>
-            <Link href="/register" className="px-4 py-1.5 text-sm bg-cyan-600 hover:bg-cyan-500 rounded-lg font-medium transition-all">注册</Link>
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
       {/* ───── Hero ───── */}
       <section className="relative pt-28 pb-20 px-6 overflow-hidden">
@@ -208,18 +194,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ───── Footer ───── */}
-      <footer className="border-t border-white/5 py-6 px-6">
-        <div className="max-w-6xl mx-auto flex items-center justify-between text-[11px] text-slate-600">
-          <div className="flex items-center gap-4">
-            <span>© 2026 AlphaSentinel</span>
-            <Link href="/grid" className="hover:text-slate-400 transition-colors">网格量化</Link>
-            <Link href="/pricing" className="hover:text-slate-400 transition-colors">AI 扫描</Link>
-            <Link href="/docs" className="hover:text-slate-400 transition-colors">API 文档</Link>
-          </div>
-          <span>alphinel.com</span>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { Shield, Zap, Brain, BarChart3, Lock, FileCode, ChevronDown, Copy, Check } from 'lucide-react';
+import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
 
 // ==================== API 接口文档 ====================
 const API_BASE = 'https://alphinel.com';
@@ -448,28 +450,9 @@ export default function DocsPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Nav */}
-      <nav className="fixed top-0 w-full z-50 border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-xl">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <Shield className="w-6 h-6 text-cyan-400" />
-            <span className="text-lg font-bold">AlphaSentinel</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/" className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors">
-              首页
-            </Link>
-            <Link href="/login" className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors">
-              登录
-            </Link>
-            <Link href="/register" className="px-4 py-2 text-sm bg-cyan-600 hover:bg-cyan-500 rounded-lg font-medium transition-colors">
-              免费注册
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
-      <div className="pt-24 pb-20 px-6">
+      <div className="pt-20 pb-20 px-6">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 text-sm mb-4">
@@ -645,13 +628,7 @@ curl ${API_BASE}/api/scan/briefings?limit=1 \\
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-800/50 py-8 px-6">
-        <div className="max-w-6xl mx-auto flex items-center justify-between text-xs text-slate-600">
-          <span>© 2026 AlphaSentinel</span>
-          <span>alphinel.com</span>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

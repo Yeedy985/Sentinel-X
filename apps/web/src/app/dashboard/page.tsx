@@ -219,21 +219,27 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900">
       {/* ─── Header ─── */}
       <nav className="border-b border-white/[0.06] bg-slate-950/90 backdrop-blur-2xl sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:shadow-cyan-500/30 transition-shadow">
-              <Shield className="w-4 h-4 text-white" />
+        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="flex items-center gap-2 group">
+              <Shield className="w-5 h-5 text-cyan-400" />
+              <span className="font-bold tracking-tight">AlphaSentinel</span>
+            </Link>
+            <div className="hidden sm:flex items-center gap-1 ml-2">
+              <Link href="/" className="px-3 py-1.5 text-sm text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">首页</Link>
+              <Link href="/grid" className="px-3 py-1.5 text-sm text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">网格量化</Link>
+              <Link href="/pricing" className="px-3 py-1.5 text-sm text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">AI 扫描</Link>
+              <Link href="/docs" className="px-3 py-1.5 text-sm text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">API 文档</Link>
             </div>
-            <span className="text-lg font-bold tracking-tight">AlphaSentinel</span>
-          </Link>
-          <div className="flex items-center gap-5">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/[0.08] border border-amber-500/15">
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/[0.08] border border-amber-500/15">
               <Coins className="w-3.5 h-3.5 text-amber-400" />
               <span className="text-sm font-semibold text-amber-300 tabular-nums">{profile?.tokenBalance ?? 0}</span>
-              <span className="text-xs text-amber-400/50">Token</span>
+              <span className="text-[10px] text-amber-400/50">Token</span>
             </div>
-            <span className="text-xs text-slate-500 hidden sm:inline">{profile?.email}</span>
-            <button onClick={handleLogout} className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all">
+            <span className="text-xs text-slate-500 hidden md:inline">{profile?.email}</span>
+            <button onClick={handleLogout} className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all" title="退出登录">
               <LogOut className="w-4 h-4" />
             </button>
           </div>
