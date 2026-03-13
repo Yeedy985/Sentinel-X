@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { Shield, Zap, Brain, BarChart3, Lock, Coins, FileCode, ChevronDown, Copy, Check } from 'lucide-react';
+import { Shield, Zap, Brain, BarChart3, Lock, Coins, FileCode, ChevronDown, Copy, Check, TrendingUp, Users, Clock, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 
 function useSiteConfig() {
@@ -68,6 +68,9 @@ export default function HomePage() {
             <span className="text-lg font-bold">AlphaSentinel</span>
           </div>
           <div className="flex items-center gap-3">
+            <a href="#strategy-plaza" className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors">
+              策略广场
+            </a>
             <a href="#api-docs" className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors">
               API 文档
             </a>
@@ -159,6 +162,9 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Strategy Plaza */}
+      <StrategyPlazaSection />
+
       {/* API Docs */}
       <ApiDocsSection />
 
@@ -170,6 +176,193 @@ export default function HomePage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+// ==================== 策略广场展示区 ====================
+interface PlazaItem {
+  shareCode: string;
+  nickname: string;
+  symbol: string;
+  baseAsset: string;
+  quoteAsset: string;
+  strategyName: string;
+  pnlUsdt: number;
+  pnlPercent: number;
+  runSeconds: number;
+  matchCount: number;
+  totalGrids: number;
+  maxDrawdownPct: number;
+  minInvestUsdt: number;
+  chartPoints: number[];
+  isRunning: boolean;
+  copyCount: number;
+  lastSyncAt: string | null;
+  createdAt: string;
+}
+
+function MiniChart({ points, positive }: { points: number[]; positive: boolean }) {
+  if (!points || points.length < 2) return null;
+  const w = 80, h = 28;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = max - min || 1;
+  const step = w / (points.length - 1);
+  const d = points.map((p, i) => {
+    const x = i * step;
+    const y = h - ((p - min) / range) * (h - 4) - 2;
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0">
+      <path d={d} fill="none" stroke={positive ? '#10b981' : '#ef4444'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function formatPlazaRuntime(seconds: number): string {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  if (days > 0) return `${days}天${hours}时`;
+  if (hours > 0) return `${hours}时`;
+  return `${Math.floor(seconds / 60)}分`;
+}
+
+function StrategyPlazaSection() {
+  const [items, setItems] = useState<PlazaItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sort, setSort] = useState<'pnl' | 'copies' | 'newest'>('pnl');
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/strategy/plaza?pageSize=8&sort=${sort}`);
+      const json = await res.json();
+      if (json.success) setItems(json.data.items || []);
+    } catch {}
+    setLoading(false);
+  };
+
+  useEffect(() => { loadData(); }, [sort]);
+
+  return (
+    <section id="strategy-plaza" className="py-20 px-6 border-t border-slate-800/50">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm mb-4">
+            <TrendingUp className="w-4 h-4" />
+            策略广场
+          </div>
+          <h2 className="text-3xl font-bold mb-3">实盘策略展示</h2>
+          <p className="text-slate-500 max-w-2xl mx-auto text-sm">
+            来自 AAGS 用户分享的真实网格交易策略，收益数据实时同步，一键复制即可使用
+          </p>
+        </div>
+
+        {/* Sort tabs */}
+        <div className="flex items-center justify-center gap-2 mb-8">
+          {([
+            { key: 'pnl' as const, label: '收益率最高' },
+            { key: 'copies' as const, label: '复制最多' },
+            { key: 'newest' as const, label: '最新分享' },
+          ]).map(opt => (
+            <button
+              key={opt.key}
+              onClick={() => setSort(opt.key)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                sort === opt.key
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                  : 'text-slate-400 hover:text-slate-200 border border-transparent'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+          <button onClick={loadData} disabled={loading} className="ml-2 p-2 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-slate-300 transition-colors" title="刷新">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+
+        {/* Cards grid */}
+        {loading && items.length === 0 ? (
+          <div className="text-center py-16">
+            <RefreshCw className="w-6 h-6 text-slate-500 animate-spin mx-auto mb-2" />
+            <p className="text-sm text-slate-500">加载中...</p>
+          </div>
+        ) : items.length === 0 ? (
+          <div className="text-center py-16">
+            <BarChart3 className="w-10 h-10 text-slate-700 mx-auto mb-3" />
+            <p className="text-sm text-slate-500">暂无分享策略</p>
+            <p className="text-xs text-slate-600 mt-1">在 AAGS 客户端中分享您的策略，它将展示在这里</p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {items.map(item => {
+              const positive = item.pnlPercent >= 0;
+              return (
+                <div key={item.shareCode} className="rounded-xl p-4 border border-slate-800/60 bg-slate-900/50 hover:border-slate-700/60 transition-all group">
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <span className="text-sm font-bold text-white">{item.baseAsset}/{item.quoteAsset}</span>
+                      <span className="ml-2 text-xs text-slate-600">网格×{item.totalGrids}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className={`w-1.5 h-1.5 rounded-full ${item.isRunning ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                      <span className={`text-xs ${item.isRunning ? 'text-emerald-400' : 'text-slate-600'}`}>
+                        {item.isRunning ? '运行中' : '已停止'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* PnL + Chart */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-xs text-slate-500 mb-0.5">收益率</p>
+                      <p className={`text-xl font-bold ${positive ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {positive ? '+' : ''}{item.pnlPercent.toFixed(2)}%
+                      </p>
+                      <p className={`text-xs ${positive ? 'text-emerald-400/70' : 'text-red-400/70'}`}>
+                        {positive ? '+' : ''}{item.pnlUsdt.toFixed(2)} USDT
+                      </p>
+                    </div>
+                    <MiniChart points={item.chartPoints || []} positive={positive} />
+                  </div>
+
+                  {/* Stats */}
+                  <div className="grid grid-cols-3 gap-2 text-xs border-t border-slate-800/60 pt-3">
+                    <div>
+                      <p className="text-slate-500 flex items-center gap-1"><Clock className="w-3 h-3" /> 运行</p>
+                      <p className="text-slate-300 font-medium mt-0.5">{formatPlazaRuntime(item.runSeconds)}</p>
+                    </div>
+                    <div>
+                      <p className="text-slate-500">回撤</p>
+                      <p className="text-slate-300 font-medium mt-0.5">{item.maxDrawdownPct.toFixed(2)}%</p>
+                    </div>
+                    <div>
+                      <p className="text-slate-500 flex items-center gap-1"><Users className="w-3 h-3" /> 使用</p>
+                      <p className="text-slate-300 font-medium mt-0.5">{item.copyCount}人</p>
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="mt-3 pt-2 border-t border-slate-800/40 flex items-center justify-between">
+                    <span className="text-xs text-slate-600 truncate max-w-[120px]">{item.nickname}</span>
+                    <span className="text-xs text-slate-600">{item.strategyName}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="text-center mt-8">
+          <p className="text-xs text-slate-600">
+            策略数据由 AAGS 用户实时上报，仅供参考 · 在 AAGS 客户端中可一键复制使用
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }
 

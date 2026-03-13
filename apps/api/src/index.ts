@@ -15,6 +15,7 @@ import { authRoutes } from './routes/auth';
 import { userRoutes } from './routes/user';
 import { scanRoutes } from './routes/scan';
 import { adminRoutes } from './routes/admin';
+import { strategyRoutes } from './routes/strategy';
 import { SERVICE_VERSION } from '@sentinel/shared';
 import { startScanWorker } from './worker/scanWorker';
 import { startRechargeScanner } from './worker/rechargeScanner';
@@ -49,6 +50,7 @@ app.route('/api/auth', authRoutes);
 app.route('/api/user', userRoutes);
 app.route('/api/scan', scanRoutes);
 app.route('/api/admin', adminRoutes);
+app.route('/api/strategy', strategyRoutes);
 
 // ── 启动 Worker ──
 startScanWorker();

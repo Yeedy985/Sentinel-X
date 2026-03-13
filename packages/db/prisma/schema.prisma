@@ -23,6 +23,7 @@ model User {
   rechargeRecords    RechargeRecord[]
   scanRecords        ScanRecord[]
   tokenTransactions  TokenTransaction[]
+  sharedStrategies   SharedStrategy[]
 
   @@map("users")
 }
@@ -290,6 +291,56 @@ model LlmCostConfig {
 
   @@unique([provider, role, model])
   @@map("llm_cost_configs")
+}
+
+// ==================== 策略广场 (共享策略) ====================
+model SharedStrategy {
+  id              Int       @id @default(autoincrement())
+  shareCode       String    @unique @map("share_code") @db.VarChar(20)   // 唯一短码 e.g. "abc123"
+  userId          Int       @map("user_id")
+  nickname        String    @default("匿名用户") @db.VarChar(100)        // 分享者昵称
+
+  // 策略配置 (不含敏感信息)
+  symbol          String    @db.VarChar(20)       // e.g. BTCUSDT
+  baseAsset       String    @map("base_asset") @db.VarChar(10)
+  quoteAsset      String    @default("USDT") @map("quote_asset") @db.VarChar(10)
+  strategyName    String    @map("strategy_name") @db.VarChar(200)
+  gridConfig      Json      @map("grid_config")   // layers/rangeMode/profitAllocation 等完整配置
+
+  // 运行时收益数据 (AAGS 定期 sync 更新)
+  pnlUsdt         Decimal   @default(0) @map("pnl_usdt") @db.Decimal(16, 4)
+  pnlPercent      Decimal   @default(0) @map("pnl_percent") @db.Decimal(8, 4)
+  runSeconds      Int       @default(0) @map("run_seconds")              // 运行时长 (秒)
+  matchCount      Int       @default(0) @map("match_count")              // 已配对次数
+  totalGrids      Int       @default(0) @map("total_grids")              // 总网格数
+  maxDrawdownPct  Decimal   @default(0) @map("max_drawdown_pct") @db.Decimal(8, 4)
+  minInvestUsdt   Decimal   @default(0) @map("min_invest_usdt") @db.Decimal(16, 4)
+  chartPoints     Json      @default("[]") @map("chart_points")          // 收益曲线数据点 number[]
+  isRunning       Boolean   @default(true) @map("is_running")
+
+  // 社交数据
+  copyCount       Int       @default(0) @map("copy_count")               // 被复制次数
+  likes           Int       @default(0)
+
+  // 状态
+  status          SharedStrategyStatus @default(ACTIVE)
+  lastSyncAt      DateTime? @map("last_sync_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user            User      @relation(fields: [userId], references: [id])
+
+  @@index([status, pnlPercent(sort: Desc)])
+  @@index([status, copyCount(sort: Desc)])
+  @@index([symbol, status])
+  @@index([userId])
+  @@map("shared_strategies")
+}
+
+enum SharedStrategyStatus {
+  ACTIVE
+  HIDDEN
+  REMOVED
 }
 
 // ==================== 管理员账号 ====================
