@@ -12,6 +12,7 @@ import type {
 import { db } from '../db';
 import { SIGNAL_GROUPS } from './sentinelEngine';
 import { collectMarketData, formatMarketDataForPrompt, type MarketDataSnapshot } from './marketDataService';
+import { getTechnicalSnapshot, formatTechnicalForPrompt } from './technicalAnalysis';
 
 // ==================== LLM Provider 配置 ====================
 export const LLM_PROVIDERS: Record<LLMProvider, {
@@ -363,18 +364,30 @@ export async function analyzeSignals(
   const searcherConfig = (await db.llmConfigs.filter(c => c.enabled && c.role === 'searcher').toArray())[0] || null;
   const totalSteps = searcherConfig ? 3 : 2;
 
-  // ===== Step 0: 免费 API 数据采集 =====
-  onProgress?.({ step: 0, totalSteps, label: '📡 采集实时市场数据', detail: 'CryptoCompare / CoinGecko / 恐贪指数' });
+  // ===== Step 0: 免费 API 数据采集 + 技术分析 =====
+  onProgress?.({ step: 0, totalSteps, label: '📡 采集市场数据 + 技术分析', detail: '行情/恐贪指数/RSI/MACD/布林带/支撑阻力位' });
   let marketDataText = '';
   let snapshot: MarketDataSnapshot | null = null;
   try {
-    snapshot = await collectMarketData();
-    marketDataText = formatMarketDataForPrompt(snapshot);
-    if (snapshot.errors.length > 0) {
-      console.warn('Market data partial errors:', snapshot.errors);
+    // 并行采集: 基础市场数据 + BTC技术分析
+    const [mktData, techSnap] = await Promise.all([
+      collectMarketData().catch(e => { console.warn('Market data failed:', e.message); return null; }),
+      getTechnicalSnapshot('BTCUSDT').catch(e => { console.warn('Technical analysis failed:', e.message); return null; }),
+    ]);
+    snapshot = mktData;
+    if (mktData) {
+      marketDataText = formatMarketDataForPrompt(mktData);
+      if (mktData.errors.length > 0) {
+        console.warn('Market data partial errors:', mktData.errors);
+      }
+    }
+    // 注入技术分析锚点 (LLM只定性，代码定量)
+    if (techSnap) {
+      marketDataText += '\n\n' + formatTechnicalForPrompt(techSnap);
+      console.log(`[Pipeline] 技术分析完成: ${techSnap.trendBias} | 波动${techSnap.volatilityLevel} | ${techSnap.anchors.length}个锚点`);
     }
   } catch (err: any) {
-    console.warn('Market data collection failed:', err.message);
+    console.warn('Data collection failed:', err.message);
   }
 
   // ===== Step 1: 联网搜索 (如果配置了 searcher) =====
