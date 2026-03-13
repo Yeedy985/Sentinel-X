@@ -208,30 +208,53 @@ export default function HomePage() {
             <h2 className="text-2xl font-bold mb-2">透明定价</h2>
             <p className="text-sm text-slate-500">按实际 LLM 消耗扣费，用多少付多少</p>
           </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all">
-              <h3 className="font-semibold mb-3">基础扫描</h3>
-              <p className="text-xs text-slate-500 mb-3">仅 DeepSeek/Gemini 深度分析</p>
-              <ul className="space-y-2 text-sm text-slate-400">
-                <li className="flex items-center gap-2"><span className="text-emerald-400 text-xs">✓</span> 300 信号矩阵分析</li>
-                <li className="flex items-center gap-2"><span className="text-emerald-400 text-xs">✓</span> SD/SV/SR 三大指数</li>
-                <li className="flex items-center gap-2"><span className="text-emerald-400 text-xs">✓</span> 预警推送 + SSE 实时流</li>
-              </ul>
-              <p className="text-[10px] text-slate-600 mt-3 pt-3 border-t border-white/5">费用 = 分析器实际消耗 Token</p>
+
+          {/* 单一扫描服务卡片 */}
+          <div className="p-6 sm:p-8 rounded-2xl bg-gradient-to-b from-cyan-500/5 to-transparent border border-cyan-500/20 hover:border-cyan-500/30 transition-all">
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <h3 className="text-lg font-bold mb-1">AI 全链路扫描</h3>
+                <p className="text-xs text-slate-500">Perplexity 联网搜索 + DeepSeek/Gemini 深度分析</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-xs text-slate-500">每次扫描费用</p>
+                <p className="text-sm font-semibold text-cyan-400">按实际 LLM 消耗</p>
+              </div>
             </div>
-            <div className="p-6 rounded-2xl bg-gradient-to-b from-cyan-500/5 to-transparent border border-cyan-500/20 hover:border-cyan-500/30 transition-all relative">
-              <div className="absolute top-3 right-3 text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-400 font-medium border border-cyan-500/20">推荐</div>
-              <h3 className="font-semibold mb-3">搜索增强扫描</h3>
-              <p className="text-xs text-slate-500 mb-3">Perplexity 搜索 + 深度分析</p>
+
+            <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 mb-5">
               <ul className="space-y-2 text-sm text-slate-400">
-                <li className="flex items-center gap-2"><span className="text-emerald-400 text-xs">✓</span> 包含基础扫描全部功能</li>
-                <li className="flex items-center gap-2"><span className="text-cyan-400 text-xs">★</span> Perplexity 实时联网搜索</li>
-                <li className="flex items-center gap-2"><span className="text-cyan-400 text-xs">★</span> 最新新闻 / 政策 / 监管</li>
+                <li className="flex items-center gap-2"><span className="text-emerald-400 text-xs">✓</span> 300 信号矩阵全量分析</li>
+                <li className="flex items-center gap-2"><span className="text-emerald-400 text-xs">✓</span> SD / SV / SR 三大核心指数</li>
+                <li className="flex items-center gap-2"><span className="text-emerald-400 text-xs">✓</span> Perplexity 实时联网搜索</li>
               </ul>
-              <p className="text-[10px] text-slate-600 mt-3 pt-3 border-t border-white/5">费用 = 搜索 + 分析器实际消耗 Token</p>
+              <ul className="space-y-2 text-sm text-slate-400">
+                <li className="flex items-center gap-2"><span className="text-emerald-400 text-xs">✓</span> 最新新闻 / 政策 / 监管动态</li>
+                <li className="flex items-center gap-2"><span className="text-emerald-400 text-xs">✓</span> SSE 实时推送预警</li>
+                <li className="flex items-center gap-2"><span className="text-emerald-400 text-xs">✓</span> 扫描失败自动退回 Token</li>
+              </ul>
+            </div>
+
+            {/* 计费流程 */}
+            <div className="flex items-center gap-3 pt-4 border-t border-white/5">
+              {[
+                { step: '1', text: '发起扫描' },
+                { step: '2', text: 'LLM 搜索 + 分析' },
+                { step: '3', text: '按实际消耗扣费' },
+                { step: '4', text: '获取简报结果' },
+              ].map((s, i) => (
+                <div key={i} className="flex items-center gap-3 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-cyan-500/15 text-cyan-400 text-[10px] font-bold flex items-center justify-center shrink-0">{s.step}</span>
+                    <span className="text-[11px] text-slate-400 whitespace-nowrap">{s.text}</span>
+                  </div>
+                  {i < 3 && <ChevronRight className="w-3 h-3 text-slate-700 shrink-0" />}
+                </div>
+              ))}
             </div>
           </div>
-          <p className="text-center text-xs text-slate-600 mt-4">缓存窗口内重复请求不会重复调用 LLM，节省成本 · 扫描失败自动退回 Token</p>
+
+          <p className="text-center text-xs text-slate-600 mt-4">缓存窗口内重复请求不会重复调用 LLM，节省成本</p>
         </div>
       </section>
 

@@ -31,7 +31,7 @@ const API_ENDPOINTS: ApiEndpoint[] = [
     headers: { 'Authorization': 'Bearer stx_xxxxxxxx', 'Content-Type': 'application/json' },
     request: {
       body: {
-        'enableSearch': 'boolean — 是否启用 Perplexity 搜索增强 (默认 true，费用 = 搜索 + 分析 LLM 实际消耗；false 则仅分析器消耗)',
+        'enableSearch': 'boolean — 是否启用 Perplexity 搜索增强 (默认 true，当前服务固定启用搜索增强，费用按实际 LLM 消耗扣除)',
       },
     },
     response: `{
