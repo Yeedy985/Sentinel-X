@@ -22,62 +22,70 @@ function generateShareCode(): string {
 
 // ── 分享策略 (需登录) ──
 strategyRoutes.post('/share', requireApiToken, async (c) => {
-  const userId = c.get('userId');
-  const body = await c.req.json();
+  try {
+    const userId = c.get('userId');
+    const body = await c.req.json();
 
-  const { symbol, baseAsset, quoteAsset, strategyName, nickname, gridConfig,
-    pnlUsdt, pnlPercent, runSeconds, matchCount, totalGrids,
-    maxDrawdownPct, minInvestUsdt, chartPoints, isRunning } = body;
+    const { symbol, baseAsset, quoteAsset, strategyName, nickname, gridConfig,
+      pnlUsdt, pnlPercent, runSeconds, matchCount, totalGrids,
+      maxDrawdownPct, minInvestUsdt, chartPoints, isRunning } = body;
 
-  if (!symbol || !strategyName || !gridConfig) {
-    return c.json<ApiResponse>({ success: false, error: '缺少必要字段: symbol, strategyName, gridConfig' }, 400);
-  }
-
-  // 每个用户最多分享 10 个策略
-  const existing = await db.sharedStrategy.count({ where: { userId, status: 'ACTIVE' } });
-  if (existing >= 10) {
-    return c.json<ApiResponse>({ success: false, error: '每个用户最多分享 10 个策略' }, 400);
-  }
-
-  // 生成唯一 shareCode
-  let shareCode = generateShareCode();
-  let attempts = 0;
-  while (await db.sharedStrategy.findUnique({ where: { shareCode } })) {
-    shareCode = generateShareCode();
-    if (++attempts > 10) {
-      return c.json<ApiResponse>({ success: false, error: '生成分享码失败，请重试' }, 500);
+    if (!symbol || !strategyName || !gridConfig) {
+      return c.json<ApiResponse>({ success: false, error: '缺少必要字段: symbol, strategyName, gridConfig' }, 400);
     }
+
+    // 每个用户最多分享 10 个策略
+    const existing = await db.sharedStrategy.count({ where: { userId, status: 'ACTIVE' } });
+    if (existing >= 10) {
+      return c.json<ApiResponse>({ success: false, error: '每个用户最多分享 10 个策略' }, 400);
+    }
+
+    // 生成唯一 shareCode
+    let shareCode = generateShareCode();
+    let attempts = 0;
+    while (await db.sharedStrategy.findUnique({ where: { shareCode } })) {
+      shareCode = generateShareCode();
+      if (++attempts > 10) {
+        return c.json<ApiResponse>({ success: false, error: '生成分享码失败，请重试' }, 500);
+      }
+    }
+
+    const user = await db.user.findUnique({ where: { id: userId }, select: { nickname: true } });
+
+    // 清理 gridConfig 中可能的非法 JSON 值 (Infinity, NaN, undefined 等)
+    const safeGridConfig = JSON.parse(JSON.stringify(gridConfig));
+
+    const strategy = await db.sharedStrategy.create({
+      data: {
+        shareCode,
+        userId,
+        nickname: nickname || user?.nickname || '匿名用户',
+        symbol,
+        baseAsset: baseAsset || symbol.replace(/USDT$/i, ''),
+        quoteAsset: quoteAsset || 'USDT',
+        strategyName,
+        gridConfig: safeGridConfig,
+        pnlUsdt: pnlUsdt ?? 0,
+        pnlPercent: pnlPercent ?? 0,
+        runSeconds: runSeconds ?? 0,
+        matchCount: matchCount ?? 0,
+        totalGrids: totalGrids ?? 0,
+        maxDrawdownPct: maxDrawdownPct ?? 0,
+        minInvestUsdt: minInvestUsdt ?? 0,
+        chartPoints: chartPoints ?? [],
+        isRunning: isRunning ?? true,
+        lastSyncAt: new Date(),
+      },
+    });
+
+    return c.json<ApiResponse>({
+      success: true,
+      data: { shareCode: strategy.shareCode, id: strategy.id },
+    }, 201);
+  } catch (err: any) {
+    console.error('[Strategy Share Error]', err);
+    return c.json<ApiResponse>({ success: false, error: err.message || '分享策略失败' }, 500);
   }
-
-  const user = await db.user.findUnique({ where: { id: userId }, select: { nickname: true } });
-
-  const strategy = await db.sharedStrategy.create({
-    data: {
-      shareCode,
-      userId,
-      nickname: nickname || user?.nickname || '匿名用户',
-      symbol,
-      baseAsset: baseAsset || symbol.replace(/USDT$/i, ''),
-      quoteAsset: quoteAsset || 'USDT',
-      strategyName,
-      gridConfig,
-      pnlUsdt: pnlUsdt ?? 0,
-      pnlPercent: pnlPercent ?? 0,
-      runSeconds: runSeconds ?? 0,
-      matchCount: matchCount ?? 0,
-      totalGrids: totalGrids ?? 0,
-      maxDrawdownPct: maxDrawdownPct ?? 0,
-      minInvestUsdt: minInvestUsdt ?? 0,
-      chartPoints: chartPoints ?? [],
-      isRunning: isRunning ?? true,
-      lastSyncAt: new Date(),
-    },
-  });
-
-  return c.json<ApiResponse>({
-    success: true,
-    data: { shareCode: strategy.shareCode, id: strategy.id },
-  }, 201);
 });
 
 // ── 同步收益数据 (需登录, 仅拥有者) ──
