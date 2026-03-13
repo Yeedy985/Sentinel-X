@@ -9,7 +9,7 @@ interface ApiResponse<T = unknown> {
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
-const DEV_MODE = false; // Next.js rewrites 代理 /api/* 到后端，无需 mock
+const DEV_MODE = false; // 生产走真实 API；本地测试时改为 process.env.NODE_ENV === 'development'
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -163,15 +163,29 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<ApiR
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const res = await fetch(url, { ...options, headers });
-    const data = await res.json();
 
     if (res.status === 401) {
       clearToken();
       if (typeof window !== 'undefined') window.location.href = '/login';
+      return { success: false, error: '登录已过期，请重新登录' };
     }
+
+    // 安全解析 JSON — 后端可能返回非 JSON（如 502/500 纯文本）
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return { success: false, error: `服务器错误 (${res.status})` };
+    }
+
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      return { success: false, error: `服务器返回了无效数据 (${res.status})` };
+    }
+
     return data;
   } catch (err: any) {
-    return { success: false, error: err?.message || 'Backend unreachable' };
+    return { success: false, error: err?.message === 'Failed to fetch' ? '无法连接服务器，请检查网络' : (err?.message || '请求失败') };
   }
 }
 

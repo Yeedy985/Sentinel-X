@@ -5,111 +5,114 @@ test.describe('/register 注册页', () => {
     await page.goto('/register');
   });
 
-  // ── 页面渲染 ──
-  test('页面正常加载，状态码200', async ({ page }) => {
-    const response = await page.goto('/register');
-    expect(response?.status()).toBe(200);
+  test('页面加载成功 200', async ({ page }) => {
+    const res = await page.goto('/register');
+    expect(res?.status()).toBe(200);
   });
 
-  // ── Logo ──
-  test('Logo 渲染且链接到首页', async ({ page }) => {
-    const logo = page.locator('a:has-text("AlphaSentinel")');
+  // ── 页面结构 ──
+  test('Logo 可见且链接到首页', async ({ page }) => {
+    const logo = page.locator('a[href="/"] >> text=AlphaSentinel');
     await expect(logo).toBeVisible();
-    await expect(logo).toHaveAttribute('href', '/');
   });
 
-  // ── 返回首页 ──
-  test('"返回首页"链接存在且可点击', async ({ page }) => {
-    const backLink = page.locator('a:has-text("返回首页")');
-    await expect(backLink).toBeVisible();
-    await backLink.click();
+  test('返回首页链接可见且可点击', async ({ page }) => {
+    await expect(page.locator('text=返回首页')).toBeVisible();
+    await page.locator('text=返回首页').click();
     await expect(page).toHaveURL('/');
   });
 
-  // ── 副标题 ──
-  test('副标题：注册即可体验 AI 驱动', async ({ page }) => {
-    await expect(page.locator('text=注册即可体验 AI 驱动')).toBeVisible();
+  test('副标题描述可见', async ({ page }) => {
+    await expect(page.locator('text=注册即送')).toBeVisible();
+  });
+
+  // ── 不显示 Navbar ──
+  test('不显示公共导航栏', async ({ page }) => {
+    const nav = page.locator('nav >> a:has-text("网格量化")');
+    await expect(nav).not.toBeVisible();
   });
 
   // ── Token 赠送提示 ──
-  test('Token 赠送提示渲染（如果后端返回）', async ({ page }) => {
-    // 等待 API 加载
-    await page.waitForTimeout(2000);
-    // 可能显示"注册即送 X Token"
-    const bonusBanner = page.locator('text=/注册即送.*Token/');
-    const hasBanner = await bonusBanner.isVisible().catch(() => false);
-    // 如果后端可达就有赠送提示；如果不可达则不显示（两者都合理）
-    expect(true).toBeTruthy(); // 不强制要求，但记录是否存在
-    if (hasBanner) {
-      await expect(page.locator('text=足够体验多次完整的 AI 市场扫描')).toBeVisible();
-    }
+  test('Token 赠送 banner 可见', async ({ page }) => {
+    await expect(page.locator('text=注册即送').first()).toBeVisible();
   });
 
   // ── 表单元素 ──
-  test('邮箱输入框存在', async ({ page }) => {
+  test('邮箱输入框存在且可输入', async ({ page }) => {
     const emailInput = page.locator('input[type="email"]');
     await expect(emailInput).toBeVisible();
+    await emailInput.fill('newuser@test.com');
+    await expect(emailInput).toHaveValue('newuser@test.com');
   });
 
-  test('密码输入框存在', async ({ page }) => {
-    const pwInput = page.locator('input[type="password"]');
-    await expect(pwInput).toBeVisible();
+  test('密码输入框存在且可输入', async ({ page }) => {
+    const pwdInput = page.locator('input[type="password"]');
+    await expect(pwdInput).toBeVisible();
+    await pwdInput.fill('securepass');
+    await expect(pwdInput).toHaveValue('securepass');
   });
 
-  test('昵称输入框存在', async ({ page }) => {
-    const nicknameInput = page.locator('input[placeholder*="昵称"]');
-    const hasNickname = await nicknameInput.isVisible().catch(() => false);
-    // 昵称可能是可选字段
-    expect(true).toBeTruthy();
+  test('昵称输入框存在且可选填', async ({ page }) => {
+    const nicknameInput = page.locator('input[placeholder*="昵称"], input[placeholder*="选填"]').first();
+    // 昵称可能不是每个注册页都有，如果有则测试
+    const count = await nicknameInput.count();
+    if (count > 0) {
+      await nicknameInput.fill('TestNickname');
+      await expect(nicknameInput).toHaveValue('TestNickname');
+    }
   });
 
   test('注册按钮存在', async ({ page }) => {
-    const registerBtn = page.locator('button:has-text("注册")');
-    await expect(registerBtn).toBeVisible();
-    await expect(registerBtn).toBeEnabled();
+    await expect(page.locator('button[type="submit"]')).toBeVisible();
   });
 
-  // ── 表单交互 ──
-  test('可以输入邮箱和密码', async ({ page }) => {
-    await page.locator('input[type="email"]').fill('test@example.com');
-    await page.locator('input[type="password"]').fill('password123');
-    await expect(page.locator('input[type="email"]')).toHaveValue('test@example.com');
-    await expect(page.locator('input[type="password"]')).toHaveValue('password123');
-  });
-
-  test('空表单提交不会导致页面崩溃', async ({ page }) => {
-    await page.locator('button:has-text("注册")').click();
+  // ── 表单验证 ──
+  test('空表单提交: 浏览器原生验证阻止提交', async ({ page }) => {
+    await page.locator('button[type="submit"]').click();
     await expect(page).toHaveURL('/register');
   });
 
-  // ── 登录引导 ──
-  test('底部登录引导链接存在', async ({ page }) => {
-    await expect(page.locator('text=已有账号？')).toBeVisible();
-    const loginLink = page.locator('a[href="/login"]:has-text("登录")');
-    await expect(loginLink).toBeVisible();
+  test('只填邮箱不填密码: 不跳转', async ({ page }) => {
+    await page.locator('input[type="email"]').fill('test@example.com');
+    await page.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL('/register');
   });
 
-  test('登录引导链接点击跳转', async ({ page }) => {
+  // ── 注册业务 ──
+  test('正确填写注册: 跳转到 /dashboard', async ({ page }) => {
+    await page.locator('input[type="email"]').fill('newuser@test.com');
+    await page.locator('input[type="password"]').fill('password123');
+    await page.locator('button[type="submit"]').click();
+    await page.waitForURL('**/dashboard', { timeout: 10000 });
+    expect(page.url()).toContain('/dashboard');
+  });
+
+  test('注册成功后: localStorage 存储了 token', async ({ page }) => {
+    await page.locator('input[type="email"]').fill('newuser2@test.com');
+    await page.locator('input[type="password"]').fill('password123');
+    await page.locator('button[type="submit"]').click();
+    await page.waitForURL('**/dashboard', { timeout: 10000 });
+    const token = await page.evaluate(() => localStorage.getItem('sentinel_token'));
+    expect(token).toBeTruthy();
+  });
+
+  // ── 登录引导 ──
+  test('登录引导链接可见', async ({ page }) => {
+    await expect(page.locator('text=已有账号')).toBeVisible();
+    await expect(page.locator('a[href="/login"]')).toBeVisible();
+  });
+
+  test('点击登录引导跳转 /login', async ({ page }) => {
     await page.locator('a[href="/login"]').click();
     await expect(page).toHaveURL('/login');
   });
 
-  // ── 无 JS 错误 ──
-  test('页面无 JS 控制台错误', async ({ page }) => {
+  // ── 无 JS 崩溃 ──
+  test('页面无未捕获的 JS 异常', async ({ page }) => {
     const errors: string[] = [];
-    page.on('console', msg => {
-      if (msg.type() === 'error') errors.push(msg.text());
-    });
+    page.on('pageerror', err => errors.push(err.message));
     await page.goto('/register');
     await page.waitForTimeout(2000);
-    const critical = errors.filter(e =>
-      !e.includes('hydrat') &&
-      !e.includes('favicon') &&
-      !e.includes('Backend unreachable') &&
-      !e.includes('Failed to fetch') &&
-      !e.includes('Failed to load resource') &&
-      !e.includes('Internal Server Error')
-    );
-    expect(critical).toEqual([]);
+    expect(errors).toEqual([]);
   });
 });

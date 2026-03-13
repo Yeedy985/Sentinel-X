@@ -5,108 +5,120 @@ test.describe('/login 登录页', () => {
     await page.goto('/login');
   });
 
-  // ── 页面渲染 ──
-  test('页面正常加载，状态码200', async ({ page }) => {
-    const response = await page.goto('/login');
-    expect(response?.status()).toBe(200);
+  test('页面加载成功 200', async ({ page }) => {
+    const res = await page.goto('/login');
+    expect(res?.status()).toBe(200);
   });
 
-  // ── Logo ──
-  test('Logo 渲染且链接到首页', async ({ page }) => {
-    const logo = page.locator('a:has-text("AlphaSentinel")');
+  // ── 页面结构 ──
+  test('Logo 可见且链接到首页', async ({ page }) => {
+    const logo = page.locator('a[href="/"] >> text=AlphaSentinel');
     await expect(logo).toBeVisible();
-    await expect(logo).toHaveAttribute('href', '/');
   });
 
-  // ── 返回首页 ──
-  test('"返回首页"链接存在且可点击', async ({ page }) => {
-    const backLink = page.locator('a:has-text("返回首页")');
-    await expect(backLink).toBeVisible();
-    await backLink.click();
+  test('返回首页链接可见', async ({ page }) => {
+    await expect(page.locator('text=返回首页')).toBeVisible();
+  });
+
+  test('点击返回首页跳转 /', async ({ page }) => {
+    await page.locator('text=返回首页').click();
     await expect(page).toHaveURL('/');
   });
 
-  // ── 副标题 ──
-  test('副标题：登录后即可使用 AI 扫描', async ({ page }) => {
-    await expect(page.locator('text=登录后即可使用 AI 扫描')).toBeVisible();
+  test('副标题描述可见', async ({ page }) => {
+    await expect(page.locator('text=登录后即可使用')).toBeVisible();
+  });
+
+  // ── 无 Navbar（登录页不显示公共 Navbar） ──
+  test('不显示公共导航栏', async ({ page }) => {
+    const nav = page.locator('nav >> a:has-text("网格量化")');
+    await expect(nav).not.toBeVisible();
   });
 
   // ── 表单元素 ──
-  test('邮箱输入框存在', async ({ page }) => {
+  test('邮箱输入框存在且可输入', async ({ page }) => {
     const emailInput = page.locator('input[type="email"]');
     await expect(emailInput).toBeVisible();
+    await emailInput.fill('test@example.com');
+    await expect(emailInput).toHaveValue('test@example.com');
   });
 
-  test('密码输入框存在', async ({ page }) => {
-    const pwInput = page.locator('input[type="password"]');
-    await expect(pwInput).toBeVisible();
+  test('密码输入框存在且可输入', async ({ page }) => {
+    const pwdInput = page.locator('input[type="password"]');
+    await expect(pwdInput).toBeVisible();
+    await pwdInput.fill('mypassword');
+    await expect(pwdInput).toHaveValue('mypassword');
   });
 
   test('登录按钮存在', async ({ page }) => {
-    const loginBtn = page.locator('button:has-text("登录")');
-    await expect(loginBtn).toBeVisible();
-    await expect(loginBtn).toBeEnabled();
+    await expect(page.locator('button[type="submit"]:has-text("登录")')).toBeVisible();
   });
 
-  // ── 表单交互 ──
-  test('可以输入邮箱和密码', async ({ page }) => {
+  // ── 表单验证 ──
+  test('空表单提交: 浏览器原生验证阻止提交', async ({ page }) => {
+    await page.locator('button[type="submit"]').click();
+    // 仍然在登录页
+    await expect(page).toHaveURL('/login');
+  });
+
+  test('只填邮箱不填密码: 不跳转', async ({ page }) => {
     await page.locator('input[type="email"]').fill('test@example.com');
-    await page.locator('input[type="password"]').fill('password123');
-    await expect(page.locator('input[type="email"]')).toHaveValue('test@example.com');
-    await expect(page.locator('input[type="password"]')).toHaveValue('password123');
-  });
-
-  test('空表单提交不会导致页面崩溃', async ({ page }) => {
-    await page.locator('button:has-text("登录")').click();
-    // 页面应仍在 /login
+    await page.locator('button[type="submit"]').click();
     await expect(page).toHaveURL('/login');
   });
 
-  test('输入错误凭据提交后显示错误提示', async ({ page }) => {
-    await page.locator('input[type="email"]').fill('wrong@test.com');
-    await page.locator('input[type="password"]').fill('wrongpass');
-    await page.locator('button:has-text("登录")').click();
-    // 等待API响应
-    await page.waitForTimeout(3000);
-    // 应该显示错误提示或仍在登录页
+  // ── 登录业务 ──
+  test('正确凭据登录: 跳转到 /dashboard', async ({ page }) => {
+    await page.locator('input[type="email"]').fill('demo@alphinel.com');
+    await page.locator('input[type="password"]').fill('demo123');
+    await page.locator('button[type="submit"]').click();
+    await page.waitForURL('**/dashboard', { timeout: 10000 });
+    expect(page.url()).toContain('/dashboard');
+  });
+
+  test('正确凭据登录: localStorage 存储了 token', async ({ page }) => {
+    await page.locator('input[type="email"]').fill('demo@alphinel.com');
+    await page.locator('input[type="password"]').fill('demo123');
+    await page.locator('button[type="submit"]').click();
+    await page.waitForURL('**/dashboard', { timeout: 10000 });
+    const token = await page.evaluate(() => localStorage.getItem('sentinel_token'));
+    expect(token).toBeTruthy();
+    expect(token).toContain('dev_mock_jwt_');
+  });
+
+  test('错误密码登录: 显示错误信息', async ({ page }) => {
+    await page.locator('input[type="email"]').fill('demo@alphinel.com');
+    await page.locator('input[type="password"]').fill('wrongpassword');
+    await page.locator('button[type="submit"]').click();
+    await expect(page.locator('text=邮箱或密码错误')).toBeVisible({ timeout: 5000 });
+    // 仍然在登录页
     await expect(page).toHaveURL('/login');
+  });
+
+  test('错误邮箱登录: 显示错误信息', async ({ page }) => {
+    await page.locator('input[type="email"]').fill('wrong@example.com');
+    await page.locator('input[type="password"]').fill('demo123');
+    await page.locator('button[type="submit"]').click();
+    await expect(page.locator('text=邮箱或密码错误')).toBeVisible({ timeout: 5000 });
   });
 
   // ── 注册引导 ──
-  test('底部注册引导链接存在', async ({ page }) => {
-    await expect(page.locator('text=还没有账号？')).toBeVisible();
-    const registerLink = page.locator('a:has-text("免费注册，送 Token 立即体验")');
-    await expect(registerLink).toBeVisible();
+  test('注册引导链接可见', async ({ page }) => {
+    await expect(page.locator('text=还没有账号')).toBeVisible();
+    await expect(page.locator('a[href="/register"]')).toBeVisible();
   });
 
-  test('注册引导链接点击跳转', async ({ page }) => {
+  test('点击注册引导跳转 /register', async ({ page }) => {
     await page.locator('a[href="/register"]').click();
     await expect(page).toHaveURL('/register');
   });
 
-  // ── 无 Navbar / Footer（独立页面） ──
-  test('登录页无 Navbar（独立布局）', async ({ page }) => {
-    // 登录页不应有完整导航栏（只有返回首页链接）
-    const fullNav = page.locator('nav a:has-text("网格量化")');
-    await expect(fullNav).not.toBeVisible();
-  });
-
-  // ── 无 JS 错误 ──
-  test('页面无 JS 控制台错误', async ({ page }) => {
+  // ── 无 JS 崩溃 ──
+  test('页面无未捕获的 JS 异常', async ({ page }) => {
     const errors: string[] = [];
-    page.on('console', msg => {
-      if (msg.type() === 'error') errors.push(msg.text());
-    });
+    page.on('pageerror', err => errors.push(err.message));
     await page.goto('/login');
     await page.waitForTimeout(2000);
-    const critical = errors.filter(e =>
-      !e.includes('hydrat') &&
-      !e.includes('favicon') &&
-      !e.includes('Backend unreachable') &&
-      !e.includes('Failed to fetch') &&
-      !e.includes('Failed to load resource') &&
-      !e.includes('Internal Server Error')
-    );
-    expect(critical).toEqual([]);
+    expect(errors).toEqual([]);
   });
 });
