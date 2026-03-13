@@ -161,7 +161,7 @@ export default function HomePage() {
           </p>
           <div className="flex items-center justify-center gap-3">
             <Link href="/register" className="group px-7 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl font-semibold transition-all shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 flex items-center gap-2">
-              {bonusTokens != null && bonusTokens > 0 ? `免费注册 · 送 ${bonusTokens} Token` : '免费注册'}
+              {bonusTokens != null && bonusTokens > 0 ? `免费注册 · 送 ${bonusTokens.toLocaleString()} Token` : '免费注册'}
               <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </Link>
             <Link href="/docs" className="px-7 py-2.5 border border-white/10 hover:border-white/20 rounded-xl font-medium text-slate-300 hover:text-white transition-all hover:bg-white/5">
@@ -330,10 +330,12 @@ export default function HomePage() {
         <div className="max-w-3xl mx-auto text-center">
           <div className="p-10 rounded-3xl bg-gradient-to-b from-cyan-500/5 to-transparent border border-white/5">
             <h2 className="text-2xl font-bold mb-3">开始使用 AlphaSentinel</h2>
-            <p className="text-sm text-slate-400 mb-6">注册即送 Token，立即体验 AI 驱动的市场扫描</p>
+            <p className="text-sm text-slate-400 mb-6">
+              {bonusTokens != null && bonusTokens > 0 ? `注册即送 ${bonusTokens.toLocaleString()} Token，` : ''}立即体验 AI 驱动的市场扫描
+            </p>
             <div className="flex items-center justify-center gap-3">
               <Link href="/register" className="group px-6 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-cyan-500/15 flex items-center gap-2">
-                免费注册 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                {bonusTokens != null && bonusTokens > 0 ? `免费注册 · 送 ${bonusTokens.toLocaleString()} Token` : '免费注册'} <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </Link>
               <Link href="/docs" className="group px-6 py-2.5 border border-white/10 hover:border-white/20 rounded-xl font-medium text-sm text-slate-300 hover:text-white transition-all flex items-center gap-2">
                 API 文档 <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors" />

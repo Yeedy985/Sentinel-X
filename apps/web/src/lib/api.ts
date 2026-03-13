@@ -9,7 +9,7 @@ interface ApiResponse<T = unknown> {
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
-const DEV_MODE = typeof window !== 'undefined' && window.location.hostname === 'localhost' && !API_BASE;
+const DEV_MODE = false; // Next.js rewrites 代理 /api/* 到后端，无需 mock
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
