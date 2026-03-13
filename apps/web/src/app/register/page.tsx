@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Shield, Loader2, Mail, Lock, User } from 'lucide-react';
@@ -13,6 +13,15 @@ export default function RegisterPage() {
   const [nickname, setNickname] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [bonusTokens, setBonusTokens] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.getSiteConfig().then(res => {
+      if (res.success && res.data) {
+        setBonusTokens((res.data as any).newUserBonusTokens ?? null);
+      }
+    }).catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,7 +122,11 @@ export default function RegisterPage() {
         </p>
 
         <div className="mt-6 p-4 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/15 text-center">
-          <p className="text-xs text-emerald-400 font-medium">注册即赠送 5 Token，可立即体验扫描服务</p>
+          <p className="text-xs text-emerald-400 font-medium">
+            {bonusTokens != null && bonusTokens > 0
+              ? `注册即赠送 ${bonusTokens} Token，可立即体验扫描服务`
+              : '注册后可体验扫描服务'}
+          </p>
         </div>
       </div>
     </div>

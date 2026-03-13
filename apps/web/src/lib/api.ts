@@ -52,6 +52,9 @@ function mockErr(error: string): any { return { success: false, error }; }
 function getMockResponse(path: string, options: RequestInit = {}): any {
   const method = options.method || 'GET';
 
+  if (path === '/api/auth/site-config' && method === 'GET') {
+    return mockOk({ registrationEnabled: true, newUserBonusTokens: 5, announcement: null });
+  }
   if (path === '/api/auth/register' && method === 'POST') {
     return mockOk({
       token: 'dev_mock_jwt_' + Date.now(),
@@ -174,6 +177,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<ApiR
 
 export const api = {
   // Auth
+  getSiteConfig: () => request<{ registrationEnabled: boolean; newUserBonusTokens: number; announcement: string | null }>('/api/auth/site-config'),
   register: (body: { email: string; password: string; nickname?: string }) =>
     request('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body: { email: string; password: string }) =>

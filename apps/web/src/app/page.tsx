@@ -1,8 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Shield, Zap, Brain, BarChart3, Lock, Coins, FileCode, ChevronDown, Copy, Check } from 'lucide-react';
+import { api } from '@/lib/api';
+
+function useSiteConfig() {
+  const [bonusTokens, setBonusTokens] = useState<number | null>(null);
+  useEffect(() => {
+    api.getSiteConfig().then(res => {
+      if (res.success && res.data) {
+        setBonusTokens((res.data as any).newUserBonusTokens ?? null);
+      }
+    }).catch(() => {});
+  }, []);
+  return { bonusTokens };
+}
 
 const features = [
   {
@@ -44,6 +57,7 @@ const features = [
 ];
 
 export default function HomePage() {
+  const { bonusTokens } = useSiteConfig();
   return (
     <div className="min-h-screen">
       {/* Nav */}
@@ -88,7 +102,7 @@ export default function HomePage() {
           </p>
           <div className="flex items-center justify-center gap-4">
             <Link href="/register" className="px-8 py-3 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-semibold text-base transition-all hover:shadow-lg hover:shadow-cyan-500/20">
-              立即注册 — 赠送 5 Token
+              {bonusTokens != null && bonusTokens > 0 ? `立即注册 — 赠送 ${bonusTokens} Token` : '立即注册'}
             </Link>
             <Link href="/login" className="px-8 py-3 border border-slate-700 hover:border-slate-500 rounded-xl font-medium text-slate-300 hover:text-white transition-all">
               已有账号？登录
@@ -330,7 +344,7 @@ es.addEventListener('heartbeat', () => {
     method: 'POST',
     path: '/api/auth/register',
     title: '用户注册',
-    desc: '注册新账号，注册成功即赠送 5 Token。',
+    desc: '注册新账号，注册成功即赠送 Token（数量以管理后台配置为准）。',
     auth: '无',
     headers: { 'Content-Type': 'application/json' },
     request: {

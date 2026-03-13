@@ -11,6 +11,23 @@ import type { RegisterRequest, LoginRequest, AuthResponse, ApiResponse } from '@
 
 export const authRoutes = new Hono();
 
+// ── 公开站点配置 (无需鉴权) ──
+authRoutes.get('/site-config', async (c) => {
+  const [regSetting, bonusSetting, announcementSetting] = await Promise.all([
+    db.adminSetting.findUnique({ where: { key: 'registration_enabled' } }),
+    db.adminSetting.findUnique({ where: { key: 'new_user_bonus_tokens' } }),
+    db.adminSetting.findUnique({ where: { key: 'announcement' } }),
+  ]);
+  return c.json<ApiResponse>({
+    success: true,
+    data: {
+      registrationEnabled: regSetting ? regSetting.value !== false : true,
+      newUserBonusTokens: (bonusSetting?.value as number) ?? 5,
+      announcement: (announcementSetting?.value as string) || null,
+    },
+  });
+});
+
 // ── 注册 ──
 authRoutes.post('/register', async (c) => {
   const body = await c.req.json<RegisterRequest>();
