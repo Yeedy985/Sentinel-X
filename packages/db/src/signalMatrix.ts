@@ -1,5 +1,5 @@
 /**
- * Sentinel-X 300信号矩阵数据 (后端DB种子 / 管理后台引用)
+ * AlphaSentinel 300信号矩阵数据 (后端DB种子 / 管理后台引用)
  * 与 AAGS 前端 sentinelEngine.ts 保持完全一致
  */
 

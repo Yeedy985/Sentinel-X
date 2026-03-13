@@ -29,7 +29,7 @@ export function isLoggedIn(): boolean {
 }
 
 /* ──────────── Dev Mock Data ──────────── */
-const MOCK_USER = { email: 'demo@sentinel.aags.app', password: 'demo123' };
+const MOCK_USER = { email: 'demo@alphinel.com', password: 'demo123' };
 let mockBalance = 5;
 let mockTokenIdCounter = 2;
 const mockTokens = [
@@ -66,7 +66,7 @@ function getMockResponse(path: string, options: RequestInit = {}): any {
         user: { id: 1, email: MOCK_USER.email, nickname: 'Demo User', tokenBalance: mockBalance, status: 'ACTIVE', createdAt: '2026-03-01T10:00:00Z' },
       });
     }
-    return mockErr('邮箱或密码错误 (Dev模式: demo@sentinel.aags.app / demo123)');
+    return mockErr('邮箱或密码错误 (Dev模式: demo@alphinel.com / demo123)');
   }
   if (path === '/api/user/config') {
     return mockOk({ usdtToTokenRate: 10 });

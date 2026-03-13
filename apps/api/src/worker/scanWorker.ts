@@ -261,7 +261,7 @@ async function processScanJob(job: any) {
 
     const analyzerPrompt = await getPromptTemplate('analyzer_prompt');
 
-    const analysisInput = `你是 Sentinel-X AI 交易系统的信号分析引擎。你的任务是基于下方提供的**搜索情报**，精确判断${enabledSignals.length}条信号矩阵中哪些正在被触发。
+    const analysisInput = `你是 AlphaSentinel AI 交易系统的信号分析引擎。你的任务是基于下方提供的**搜索情报**，精确判断${enabledSignals.length}条信号矩阵中哪些正在被触发。
 
 ${searchContext ? `## 🔍 联网搜索情报\n${searchContext}\n` : '（无搜索情报，请基于你的训练数据中最近的市场知识进行分析）'}
 
@@ -311,7 +311,7 @@ ${signalListText}
 
     const analysisResult = await callLLM(
       analyzerPipeline,
-      analyzerPrompt || '你是 Sentinel-X AI 加密市场信号分析引擎。请始终用中文回复，严格按要求的 JSON 格式输出。只报告有真实事件支持的信号触发。',
+      analyzerPrompt || '你是 AlphaSentinel AI 加密市场信号分析引擎。请始终用中文回复，严格按要求的 JSON 格式输出。只报告有真实事件支持的信号触发。',
       analysisInput,
     );
     const analyzerTokens = analysisResult.usage.totalTokens;

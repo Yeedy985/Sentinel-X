@@ -2,7 +2,7 @@
   "name": "sentinel-service",
   "version": "1.0.0",
   "private": true,
-  "description": "Sentinel-X 公共扫描服务 — 后端API + 主页 + 管理后台",
+  "description": "AlphaSentinel 公共扫描服务 — 后端API + 主页 + 管理后台",
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",

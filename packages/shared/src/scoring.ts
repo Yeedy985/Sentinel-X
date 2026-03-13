@@ -1,5 +1,5 @@
 /**
- * Sentinel-X Scoring Engine (Server-side)
+ * AlphaSentinel Scoring Engine (Server-side)
  * 与 AAGS 客户端 sentinelEngine.ts 保持完全一致的评分算法 v2
  * 
  * 三维评分均使用 tanh 压缩:

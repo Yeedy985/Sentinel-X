@@ -1,5 +1,5 @@
 /**
- * Sentinel-X API Server
+ * AlphaSentinel API Server
  * Hono + Node.js HTTP server
  */
 // 加载 .env 环境变量 (Node 20.6+)
@@ -39,7 +39,7 @@ app.use('*', cors({
 
 // ── 健康检查 ──
 app.get('/', (c) => c.json({
-  service: 'Sentinel-X Public Scan Service',
+  service: 'AlphaSentinel Public Scan Service',
   version: SERVICE_VERSION,
   status: 'ok',
 }));
@@ -57,7 +57,7 @@ startRechargeScanner();
 // ── 启动 HTTP ──
 const port = Number(process.env.PORT) || 3001;
 serve({ fetch: app.fetch, port }, () => {
-  console.log(`🚀 Sentinel-X API running at http://localhost:${port}`);
+  console.log(`🚀 AlphaSentinel API running at http://localhost:${port}`);
 });
 
 export default app;

@@ -83,7 +83,7 @@ export default function AdminDashboardPage() {
     <div className="p-5 xl:p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">运营仪表盘</h1>
-        <p className="text-sm text-slate-500 mt-1">Sentinel-X 服务运营数据概览</p>
+        <p className="text-sm text-slate-500 mt-1">AlphaSentinel 服务运营数据概览</p>
       </div>
 
       {/* Today Stat Cards */}

@@ -224,7 +224,7 @@ export default function DashboardPage() {
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:shadow-cyan-500/30 transition-shadow">
               <Shield className="w-4 h-4 text-white" />
             </div>
-            <span className="text-lg font-bold tracking-tight">Sentinel-X</span>
+            <span className="text-lg font-bold tracking-tight">AlphaSentinel</span>
           </Link>
           <div className="flex items-center gap-5">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/[0.08] border border-amber-500/15">

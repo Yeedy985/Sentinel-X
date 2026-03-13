@@ -51,7 +51,7 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Shield className="w-6 h-6 text-cyan-400" />
-            <span className="text-lg font-bold">Sentinel-X</span>
+            <span className="text-lg font-bold">AlphaSentinel</span>
           </div>
           <div className="flex items-center gap-3">
             <a href="#api-docs" className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors">
@@ -76,10 +76,10 @@ export default function HomePage() {
           </div>
           <h1 className="text-5xl md:text-6xl font-bold tracking-tight mb-6">
             <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-violet-400 bg-clip-text text-transparent">
-              Sentinel-X
+              AlphaSentinel
             </span>
             <br />
-            <span className="text-slate-200">市场舆情监控系统</span>
+            <span className="text-slate-200">市场智能扫描服务</span>
           </h1>
           <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
             基于 300 条信号矩阵，通过 Perplexity 搜索引擎 + DeepSeek/Gemini 分析管线，
@@ -151,8 +151,8 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t border-slate-800/50 py-8 px-6">
         <div className="max-w-6xl mx-auto flex items-center justify-between text-xs text-slate-600">
-          <span>© 2026 Sentinel-X · AAGS 自适应网格交易系统</span>
-          <span>sentinel.aags.app</span>
+          <span>© 2026 AlphaSentinel</span>
+          <span>alphinel.com</span>
         </div>
       </footer>
     </div>
@@ -160,7 +160,7 @@ export default function HomePage() {
 }
 
 // ==================== API 接口文档 ====================
-const API_BASE = 'https://sentinel.aags.app';
+const API_BASE = 'https://alphinel.com';
 
 interface ApiEndpoint {
   method: 'GET' | 'POST' | 'DELETE';
@@ -610,7 +610,7 @@ function ApiDocsSection() {
           </div>
           <h2 className="text-3xl font-bold mb-4">API 接口文档</h2>
           <p className="text-slate-500 max-w-2xl mx-auto">
-            通过 RESTful API 接入 Sentinel-X 300 信号扫描服务。所有扫描相关接口使用 API Token 认证，
+            通过 RESTful API 接入 AlphaSentinel 300 信号扫描服务。所有扫描相关接口使用 API Token 认证，
             用户管理接口使用 JWT 认证。
           </p>
         </div>

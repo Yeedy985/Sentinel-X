@@ -1,0 +1,13 @@
+{
+  "name": "AlphaSentinel",
+  "short_name": "AlphaSentinel",
+  "description": "AI 驱动的加密市场智能扫描服务 · alphinel.com",
+  "theme_color": "#0a0e1a",
+  "background_color": "#0a0e1a",
+  "display": "standalone",
+  "start_url": "/",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

@@ -1,5 +1,5 @@
 /**
- * Sentinel-X 数据库种子数据
+ * AlphaSentinel 数据库种子数据
  * 初始化管理员账号、默认配置、LLM成本配置、信号矩阵
  */
 import { PrismaClient } from '@prisma/client';
@@ -82,7 +82,7 @@ async function main() {
     update: {},
     create: {
       name: 'searcher_prompt',
-      content: `你是 Sentinel-X 实时市场情报搜索引擎。请搜索过去24小时内加密货币市场的最新重大事件、监管政策变化、大型交易所动态、DeFi和NFT板块变化、宏观经济影响因素。
+      content: `你是 AlphaSentinel 实时市场情报搜索引擎。请搜索过去24小时内加密货币市场的最新重大事件、监管政策变化、大型交易所动态、DeFi和NFT板块变化、宏观经济影响因素。
 
 返回格式:
 1. 每条情报包含: 标题、摘要、来源、时间、影响评估
@@ -99,7 +99,7 @@ async function main() {
     update: {},
     create: {
       name: 'analyzer_prompt',
-      content: `你是 Sentinel-X AI 加密市场信号分析引擎。请基于提供的市场数据和搜索情报，分析以下300条信号矩阵中哪些被触发。
+      content: `你是 AlphaSentinel AI 加密市场信号分析引擎。请基于提供的市场数据和搜索情报，分析以下300条信号矩阵中哪些被触发。
 
 规则:
 1. 只报告有真实事件支撑的信号触发，不要编造
@@ -117,7 +117,7 @@ async function main() {
     update: {},
     create: {
       name: 'signal_matrix',
-      content: `Sentinel-X 300信号矩阵 (每条格式: #ID | 组别 | 名称 | impact | 分类D/V/R | 触发条件)
+      content: `AlphaSentinel 300信号矩阵 (每条格式: #ID | 组别 | 名称 | impact | 分类D/V/R | 触发条件)
 
 [G1] 宏观流动性 (1-30):
 #1 CPI同比 |-15|D| #2 核心CPI |-15|D| #3 PCE |-12|D| #4 核心PCE |-12|D| #5 PPI |-10|D|

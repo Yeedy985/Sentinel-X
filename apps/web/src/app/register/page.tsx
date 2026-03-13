@@ -37,7 +37,7 @@ export default function RegisterPage() {
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:shadow-cyan-500/30 transition-shadow">
               <Shield className="w-5 h-5 text-white" />
             </div>
-            <span className="text-2xl font-extrabold tracking-tight">Sentinel-X</span>
+            <span className="text-2xl font-extrabold tracking-tight">AlphaSentinel</span>
           </Link>
           <p className="text-slate-500 mt-3 text-sm">创建你的账号</p>
         </div>

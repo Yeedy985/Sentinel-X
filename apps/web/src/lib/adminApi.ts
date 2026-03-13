@@ -19,7 +19,7 @@ export function isLoggedIn(): boolean {
 }
 
 /* ──────────── Dev Mock Data ──────────── */
-const MOCK_ADMIN = { email: 'admin@sentinel.aags.app', password: 'admin' };
+const MOCK_ADMIN = { email: 'admin@alphinel.com', password: 'admin' };
 
 const mockDashboard = {
   today: {
@@ -212,7 +212,7 @@ function getMockResponse(path: string, options: RequestInit = {}): any {
 
   // Mock: 管理员 CRUD
   if (path === '/api/admin/admins' && method === 'GET') return mockOk([
-    { id: 1, email: 'admin@sentinel.aags.app', name: 'Sentinel Admin', createdAt: '2026-01-01T00:00:00Z' },
+    { id: 1, email: 'admin@alphinel.com', name: 'AlphaSentinel Admin', createdAt: '2026-01-01T00:00:00Z' },
   ]);
   if (path === '/api/admin/admins' && method === 'POST') return mockOk({ id: 99 });
   if (path.match(/\/api\/admin\/admins\/\d+/) && method === 'PUT') return mockOk({ ok: true });

@@ -34,7 +34,7 @@ export default function AdminLoginPage() {
           <div className="w-14 h-14 rounded-2xl bg-orange-500/15 flex items-center justify-center mx-auto mb-4">
             <Shield className="w-7 h-7 text-orange-400" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Sentinel-X</h1>
+          <h1 className="text-2xl font-bold text-white">AlphaSentinel</h1>
           <p className="text-sm text-slate-500 mt-1.5">Admin Console</p>
         </div>
 
@@ -54,7 +54,7 @@ export default function AdminLoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/[0.03] border border-slate-800/60 text-[15px] text-white placeholder-slate-600 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20 focus:outline-none transition-all"
-                placeholder="admin@sentinel.aags.app"
+                placeholder="admin@alphinel.com"
                 required
               />
             </div>

@@ -247,7 +247,7 @@ export default function SettingsPage() {
           </div>
           系统设置
         </h1>
-        <p className="text-sm text-slate-400 mt-2 ml-[52px]">管理 Sentinel-X 的全局运行参数</p>
+        <p className="text-sm text-slate-400 mt-2 ml-[52px]">管理 AlphaSentinel 的全局运行参数</p>
       </div>
 
       {/* 计费模式卡片 */}

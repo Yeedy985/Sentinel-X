@@ -806,9 +806,9 @@ export default function PipelinesPage() {
 
                       return (
                         <div className="space-y-4">
-                          {/* Sentinel-X 实时评分 */}
+                          {/* AlphaSentinel 实时评分 */}
                           <div className="p-4 rounded-xl bg-gradient-to-r from-slate-800/60 to-slate-900/40 border border-slate-700/40">
-                            <h3 className="text-sm font-semibold text-slate-300 mb-3">Sentinel-X 实时评分</h3>
+                            <h3 className="text-sm font-semibold text-slate-300 mb-3">AlphaSentinel 实时评分</h3>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                               <div className="text-center">
                                 <div className={`text-2xl font-bold ${totalImpact > 0 ? 'text-emerald-400' : totalImpact < 0 ? 'text-red-400' : 'text-slate-400'}`}>

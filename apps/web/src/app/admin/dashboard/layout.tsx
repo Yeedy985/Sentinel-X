@@ -40,7 +40,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Shield className="w-4.5 h-4.5 text-orange-400" />
           </div>
           <div>
-            <span className="font-bold text-[15px] tracking-wide text-white">Sentinel-X</span>
+            <span className="font-bold text-[15px] tracking-wide text-white">AlphaSentinel</span>
             <span className="text-[10px] text-slate-600 block -mt-0.5">Admin Console</span>
           </div>
         </div>

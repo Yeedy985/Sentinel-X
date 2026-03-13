@@ -164,7 +164,7 @@ export default function SignalsPage() {
             信号矩阵管理
           </h1>
           <p className="text-sm text-slate-500 mt-2 ml-[52px]">
-            管理 Sentinel-X 300条信号的启用状态与参数
+            管理 AlphaSentinel 300条信号的启用状态与参数
           </p>
         </div>
         <div className="flex items-center gap-4">
