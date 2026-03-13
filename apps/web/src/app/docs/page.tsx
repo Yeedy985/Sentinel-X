@@ -26,12 +26,12 @@ const API_ENDPOINTS: ApiEndpoint[] = [
     method: 'POST',
     path: '/api/scan/request',
     title: '请求扫描',
-    desc: '请求执行一次 300 信号矩阵扫描。系统将预扣 Token，扫描完成后结果可通过简报接口获取或 SSE 实时推送。',
+    desc: '请求执行一次 300 信号矩阵扫描。扫描完成后按实际 LLM 消耗扣除 Token，失败自动退回。结果可通过简报接口获取或 SSE 实时推送。',
     auth: 'API Token',
     headers: { 'Authorization': 'Bearer stx_xxxxxxxx', 'Content-Type': 'application/json' },
     request: {
       body: {
-        'enableSearch': 'boolean — 是否启用 Perplexity 搜索增强 (默认 true，消耗 2 Token；false 则仅基础分析，消耗 1 Token)',
+        'enableSearch': 'boolean — 是否启用 Perplexity 搜索增强 (默认 true，费用 = 搜索 + 分析 LLM 实际消耗；false 则仅分析器消耗)',
       },
     },
     response: `{
@@ -39,12 +39,13 @@ const API_ENDPOINTS: ApiEndpoint[] = [
   "data": {
     "briefingId": "brf_1710000000_a1b2c3d4",
     "estimatedSeconds": 30,
-    "tokenCost": 2,
+    "tokenCost": 1530,
     "cached": false
   }
 }`,
     notes: [
-      '若 5 分钟内有相同类型的扫描缓存，将直接返回缓存结果 (cached=true, estimatedSeconds=0)',
+      'tokenCost 为实际 LLM 消耗的 Token 数，每次扫描可能不同',
+      '缓存窗口内重复请求不会重复调用 LLM，但仍按同等费用扣除',
       '频率限制：默认每用户每小时最多 3 次',
       'briefingId 用于后续查询简报结果',
     ],
@@ -162,7 +163,7 @@ es.addEventListener('heartbeat', () => {
   "data": {
     "ok": true,
     "version": "1.0.0",
-    "tokenBalance": 15,
+    "tokenBalance": 18500,
     "message": null
   }
 }`,
@@ -193,7 +194,7 @@ es.addEventListener('heartbeat', () => {
       "id": 1,
       "email": "user@example.com",
       "nickname": "Trader",
-      "tokenBalance": 5,
+      "tokenBalance": 20000,
       "status": "active",
       "createdAt": "2026-03-12T00:00:00.000Z"
     }
@@ -217,7 +218,7 @@ es.addEventListener('heartbeat', () => {
   "success": true,
   "data": {
     "token": "eyJhbGci...",
-    "user": { "id": 1, "email": "...", "tokenBalance": 15, ... }
+    "user": { "id": 1, "email": "...", "tokenBalance": 20000, ... }
   }
 }`,
   },

@@ -124,7 +124,7 @@ export default function RegisterPage() {
         <div className="mt-6 p-4 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/15 text-center">
           <p className="text-xs text-emerald-400 font-medium">
             {bonusTokens != null && bonusTokens > 0
-              ? `注册即赠送 ${bonusTokens} Token，可立即体验扫描服务`
+              ? `注册即赠送 ${bonusTokens.toLocaleString()} Token，可立即体验扫描服务`
               : '注册后可体验扫描服务'}
           </p>
         </div>

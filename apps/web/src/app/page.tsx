@@ -185,7 +185,7 @@ export default function HomePage() {
               { icon: BarChart3, title: 'SD/SV/SR 指数', desc: '方向·波动·风险三大核心指数，一目了然', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
               { icon: Shield, title: '实时预警推送', desc: 'SSE + Telegram/WhatsApp，不错过重大事件', color: 'text-violet-400', bg: 'bg-violet-500/10' },
               { icon: Lock, title: 'API Token 认证', desc: '安全接入，支持客户端无缝集成', color: 'text-rose-400', bg: 'bg-rose-500/10' },
-              { icon: Coins, title: '透明计费', desc: '按次扣费，智能缓存降低成本', color: 'text-orange-400', bg: 'bg-orange-500/10' },
+              { icon: Coins, title: '透明计费', desc: '按实际 LLM 消耗扣费，智能缓存降低成本', color: 'text-orange-400', bg: 'bg-orange-500/10' },
             ].map((f, i) => (
               <div key={i} className="flex items-start gap-4 p-5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all group">
                 <div className={`p-2.5 rounded-xl ${f.bg} shrink-0`}>
@@ -205,37 +205,33 @@ export default function HomePage() {
       <section id="pricing" className="py-16 px-6">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-10">
-            <h2 className="text-2xl font-bold mb-2">简单定价</h2>
-            <p className="text-sm text-slate-500">按次计费，用多少付多少</p>
+            <h2 className="text-2xl font-bold mb-2">透明定价</h2>
+            <p className="text-sm text-slate-500">按实际 LLM 消耗扣费，用多少付多少</p>
           </div>
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all">
-              <div className="flex items-baseline gap-2 mb-3">
-                <span className="text-3xl font-bold text-cyan-400">1</span>
-                <span className="text-sm text-slate-500">Token / 次</span>
-              </div>
               <h3 className="font-semibold mb-3">基础扫描</h3>
+              <p className="text-xs text-slate-500 mb-3">仅 DeepSeek/Gemini 深度分析</p>
               <ul className="space-y-2 text-sm text-slate-400">
                 <li className="flex items-center gap-2"><span className="text-emerald-400 text-xs">✓</span> 300 信号矩阵分析</li>
                 <li className="flex items-center gap-2"><span className="text-emerald-400 text-xs">✓</span> SD/SV/SR 三大指数</li>
                 <li className="flex items-center gap-2"><span className="text-emerald-400 text-xs">✓</span> 预警推送 + SSE 实时流</li>
               </ul>
+              <p className="text-[10px] text-slate-600 mt-3 pt-3 border-t border-white/5">费用 = 分析器实际消耗 Token</p>
             </div>
             <div className="p-6 rounded-2xl bg-gradient-to-b from-cyan-500/5 to-transparent border border-cyan-500/20 hover:border-cyan-500/30 transition-all relative">
               <div className="absolute top-3 right-3 text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-400 font-medium border border-cyan-500/20">推荐</div>
-              <div className="flex items-baseline gap-2 mb-3">
-                <span className="text-3xl font-bold text-cyan-400">2</span>
-                <span className="text-sm text-slate-500">Token / 次</span>
-              </div>
-              <h3 className="font-semibold mb-3">搜索增强</h3>
+              <h3 className="font-semibold mb-3">搜索增强扫描</h3>
+              <p className="text-xs text-slate-500 mb-3">Perplexity 搜索 + 深度分析</p>
               <ul className="space-y-2 text-sm text-slate-400">
                 <li className="flex items-center gap-2"><span className="text-emerald-400 text-xs">✓</span> 包含基础扫描全部功能</li>
-                <li className="flex items-center gap-2"><span className="text-cyan-400 text-xs">★</span> Perplexity 实时搜索</li>
+                <li className="flex items-center gap-2"><span className="text-cyan-400 text-xs">★</span> Perplexity 实时联网搜索</li>
                 <li className="flex items-center gap-2"><span className="text-cyan-400 text-xs">★</span> 最新新闻 / 政策 / 监管</li>
               </ul>
+              <p className="text-[10px] text-slate-600 mt-3 pt-3 border-t border-white/5">费用 = 搜索 + 分析器实际消耗 Token</p>
             </div>
           </div>
-          <p className="text-center text-xs text-slate-600 mt-4">5 分钟内重复请求命中缓存，不消耗额外成本</p>
+          <p className="text-center text-xs text-slate-600 mt-4">缓存窗口内重复请求不会重复调用 LLM，节省成本 · 扫描失败自动退回 Token</p>
         </div>
       </section>
 
