@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Shield, Loader2, Mail, Lock } from 'lucide-react';
+import { Shield, Loader2, Mail, Lock, ArrowLeft } from 'lucide-react';
 import { api, setToken } from '@/lib/api';
 
 export default function LoginPage() {
@@ -17,83 +17,102 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
-    const res = await api.login({ email, password });
-    if (res.success && res.data) {
-      const data = res.data as any;
-      setToken(data.token);
-      router.push('/dashboard');
-    } else {
-      setError(res.error || '登录失败');
+    try {
+      const res = await api.login({ email, password });
+      if (res.success && res.data) {
+        const data = res.data as any;
+        setToken(data.token);
+        router.push('/dashboard');
+      } else {
+        setError(res.error || '登录失败');
+      }
+    } catch {
+      setError('连接服务器失败，请检查网络后重试');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-[#020617] relative overflow-hidden">
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[400px] bg-cyan-500/[0.04] rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/3 w-[300px] h-[300px] bg-violet-500/[0.03] rounded-full blur-[120px] pointer-events-none" />
+
+      <Link href="/" className="absolute top-6 left-6 flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors">
+        <ArrowLeft className="w-4 h-4" /> 返回首页
+      </Link>
+
+      <div className="relative w-full max-w-sm">
         <div className="text-center mb-10">
-          <Link href="/" className="inline-flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:shadow-cyan-500/30 transition-shadow">
+          <Link href="/" className="inline-flex items-center gap-2.5 group">
+            <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 via-blue-500 to-violet-500 flex items-center justify-center shadow-lg shadow-cyan-500/25 group-hover:shadow-cyan-500/40 transition-all duration-300 group-hover:scale-105">
               <Shield className="w-5 h-5 text-white" />
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent" />
             </div>
-            <span className="text-2xl font-extrabold tracking-tight">AlphaSentinel</span>
+            <span className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">AlphaSentinel</span>
           </Link>
-          <p className="text-slate-500 mt-3 text-sm">登录到你的账号</p>
+          <p className="text-slate-400 mt-3 text-sm">登录后即可使用 AI 扫描、管理 Token 和查看扫描记录</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {error && (
-            <div className="p-4 rounded-xl bg-red-500/[0.08] border border-red-500/20 text-red-300 text-sm font-medium flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-              {error}
-            </div>
-          )}
+        <div className="p-7 rounded-2xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-sm">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {error && (
+              <div className="p-3.5 rounded-xl bg-red-500/[0.08] border border-red-500/15 text-red-300 text-[13px] font-medium flex items-center gap-2.5">
+                <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
+                {error}
+              </div>
+            )}
 
-          <div>
-            <label className="text-[11px] font-medium text-slate-500 block mb-2 uppercase tracking-wider">邮箱</label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 focus:outline-none transition-all"
-                placeholder="your@email.com"
-                required
-              />
+            <div>
+              <label className="text-[11px] font-semibold text-slate-500 block mb-2 uppercase tracking-wider">邮箱</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-[14px] text-white placeholder-slate-600 focus:border-cyan-500/40 focus:bg-white/[0.04] focus:outline-none transition-all duration-200"
+                  placeholder="your@email.com"
+                  required
+                />
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="text-[11px] font-medium text-slate-500 block mb-2 uppercase tracking-wider">密码</label>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 focus:outline-none transition-all"
-                placeholder="输入密码"
-                required
-                minLength={6}
-              />
+            <div>
+              <label className="text-[11px] font-semibold text-slate-500 block mb-2 uppercase tracking-wider">密码</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-[14px] text-white placeholder-slate-600 focus:border-cyan-500/40 focus:bg-white/[0.04] focus:outline-none transition-all duration-200"
+                  placeholder="输入密码"
+                  required
+                  minLength={6}
+                />
+              </div>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-40 rounded-xl font-bold text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/15 hover:shadow-cyan-500/25"
-          >
-            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            登录
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={loading}
+              className="group relative w-full py-3.5 rounded-xl font-bold text-[14px] overflow-hidden transition-all duration-300 disabled:opacity-40 hover:shadow-lg hover:shadow-cyan-500/20 hover:-translate-y-0.5 active:translate-y-0"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-600" />
+              <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <span className="relative flex items-center justify-center gap-2">
+                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                登录
+              </span>
+            </button>
+          </form>
+        </div>
 
         <p className="text-center text-sm text-slate-500 mt-8">
           还没有账号？{' '}
-          <Link href="/register" className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors">
-            免费注册
+          <Link href="/register" className="text-cyan-400 hover:text-cyan-300 font-semibold transition-colors">
+            免费注册，送 Token 立即体验
           </Link>
         </p>
       </div>

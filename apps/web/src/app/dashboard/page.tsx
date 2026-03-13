@@ -54,11 +54,17 @@ export default function DashboardPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const [pRes, tRes, cRes] = await Promise.all([api.getProfile(), api.getTokens(), api.getConfig()]);
-    if (pRes.success) setProfile(pRes.data);
-    if (tRes.success) setTokens((tRes.data as any[]) || []);
-    if (cRes.success) setUsdtRate((cRes.data as any)?.usdtToTokenRate || 10);
-    setLoading(false);
+    try {
+      const [pRes, tRes, cRes] = await Promise.all([api.getProfile(), api.getTokens(), api.getConfig()]);
+      if (pRes.success) setProfile(pRes.data);
+      else if (pRes.error) setMessage({ type: 'error', text: `加载用户信息失败: ${pRes.error}` });
+      if (tRes.success) setTokens((tRes.data as any[]) || []);
+      if (cRes.success) setUsdtRate((cRes.data as any)?.usdtToTokenRate || 10);
+    } catch (err: any) {
+      setMessage({ type: 'error', text: `连接服务器失败，请检查网络后刷新重试` });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const refreshProfile = async () => {
@@ -67,33 +73,39 @@ export default function DashboardPage() {
   };
 
   const loadTransactions = async (page = 1) => {
-    const res = await api.getTransactions(page);
-    if (res.success) {
-      const d = res.data as any;
-      setTransactions(d.data || []);
-      setTxPage(d.page);
-      setTxTotal(d.totalPages);
-    }
+    try {
+      const res = await api.getTransactions(page);
+      if (res.success) {
+        const d = res.data as any;
+        setTransactions(d.data || []);
+        setTxPage(d.page);
+        setTxTotal(d.totalPages);
+      }
+    } catch {}
   };
 
   const loadScans = async (page = 1) => {
-    const res = await api.getScans(page);
-    if (res.success) {
-      const d = res.data as any;
-      setScans(d.data || []);
-      setScanPage(d.page);
-      setScanTotal(d.totalPages);
-    }
+    try {
+      const res = await api.getScans(page);
+      if (res.success) {
+        const d = res.data as any;
+        setScans(d.data || []);
+        setScanPage(d.page);
+        setScanTotal(d.totalPages);
+      }
+    } catch {}
   };
 
   const loadRecharges = async (page = 1) => {
-    const res = await api.getRecharges(page);
-    if (res.success) {
-      const d = res.data as any;
-      setRecharges(d.data || []);
-      setRechargePage(d.page);
-      setRechargeTotal(d.totalPages);
-    }
+    try {
+      const res = await api.getRecharges(page);
+      if (res.success) {
+        const d = res.data as any;
+        setRecharges(d.data || []);
+        setRechargePage(d.page);
+        setRechargeTotal(d.totalPages);
+      }
+    } catch {}
   };
 
   useEffect(() => {
@@ -127,46 +139,61 @@ export default function DashboardPage() {
     const amount = Number(rechargeAmount);
     if (!amount || amount < 1) { showMsg('error', '最低充值 1 USDT'); return; }
     setRechargeLoading(true);
-    const res = await api.createRecharge(amount, selectedNetwork);
-    if (res.success) {
-      setRechargeOrder(res.data);
-      setPaidConfirmed(false);
-      showMsg('success', `充值订单已创建: ${amount} USDT (${selectedNetwork})`);
-      setRechargeAmount('');
-    } else {
-      showMsg('error', (res as any).error || '创建失败');
+    try {
+      const res = await api.createRecharge(amount, selectedNetwork);
+      if (res.success) {
+        setRechargeOrder(res.data);
+        setPaidConfirmed(false);
+        showMsg('success', `充值订单已创建: ${amount} USDT (${selectedNetwork})`);
+        setRechargeAmount('');
+      } else {
+        showMsg('error', (res as any).error || '创建失败');
+      }
+    } catch {
+      showMsg('error', '网络连接失败，请重试');
+    } finally {
+      setRechargeLoading(false);
     }
-    setRechargeLoading(false);
   };
 
   const handleConfirmPayment = async (orderId: number) => {
     setRechargeLoading(true);
-    const res = await api.confirmRecharge(orderId);
-    if (res.success) {
-      showMsg('success', '已确认到账，请点击"兑换Token"');
-      if (rechargeOrder?.id === orderId) {
-        setRechargeOrder({ ...rechargeOrder, status: 'COMPLETED' });
+    try {
+      const res = await api.confirmRecharge(orderId);
+      if (res.success) {
+        showMsg('success', '已确认到账，请点击“兑换Token”');
+        if (rechargeOrder?.id === orderId) {
+          setRechargeOrder({ ...rechargeOrder, status: 'COMPLETED' });
+        }
+        loadRecharges(rechargePage);
+      } else {
+        showMsg('error', (res as any).error || '确认失败');
       }
-      loadRecharges(rechargePage);
-    } else {
-      showMsg('error', (res as any).error || '确认失败');
+    } catch (err: any) {
+      showMsg('error', '网络连接失败，请重试');
+    } finally {
+      setRechargeLoading(false);
     }
-    setRechargeLoading(false);
   };
 
   const handleExchange = async (rechargeId: number) => {
     setExchangeLoading(rechargeId);
-    const res = await api.exchange(rechargeId);
-    if (res.success) {
-      const d = res.data as any;
-      showMsg('success', `成功兑换 ${d.tokensGranted} Token！当前余额: ${d.newBalance}`);
-      await refreshProfile();
-      loadRecharges(rechargePage);
-      setRechargeOrder(null);
-    } else {
-      showMsg('error', (res as any).error || '兑换失败');
+    try {
+      const res = await api.exchange(rechargeId);
+      if (res.success) {
+        const d = res.data as any;
+        showMsg('success', `成功兑换 ${d.tokensGranted} Token！当前余额: ${d.newBalance}`);
+        await refreshProfile();
+        loadRecharges(rechargePage);
+        setRechargeOrder(null);
+      } else {
+        showMsg('error', (res as any).error || '兑换失败');
+      }
+    } catch {
+      showMsg('error', '网络连接失败，请重试');
+    } finally {
+      setExchangeLoading(null);
     }
-    setExchangeLoading(null);
   };
 
   const handleCopy = (text: string, label: string) => {
@@ -178,21 +205,32 @@ export default function DashboardPage() {
   // ── Token Management ──
   const handleCreateToken = async () => {
     setCreating(true);
-    const res = await api.createToken(newTokenName || undefined);
-    if (res.success) {
-      const d = res.data as any;
-      setCreatedToken(d.token);
-      setNewTokenName('');
-      const tRes = await api.getTokens();
-      if (tRes.success) setTokens((tRes.data as any[]) || []);
+    try {
+      const res = await api.createToken(newTokenName || undefined);
+      if (res.success) {
+        const d = res.data as any;
+        setCreatedToken(d.token);
+        setNewTokenName('');
+        const tRes = await api.getTokens();
+        if (tRes.success) setTokens((tRes.data as any[]) || []);
+      } else {
+        showMsg('error', (res as any).error || '创建失败');
+      }
+    } catch {
+      showMsg('error', '网络连接失败，请重试');
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   };
 
   const handleRevoke = async (id: number) => {
-    await api.revokeToken(id);
-    const tRes = await api.getTokens();
-    if (tRes.success) setTokens((tRes.data as any[]) || []);
+    try {
+      await api.revokeToken(id);
+      const tRes = await api.getTokens();
+      if (tRes.success) setTokens((tRes.data as any[]) || []);
+    } catch {
+      showMsg('error', '撤销失败，请重试');
+    }
   };
 
   const handleLogout = () => { clearToken(); router.push('/login'); };
@@ -208,7 +246,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-[#020617]">
         <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
         <p className="text-sm text-slate-500 tracking-wide">加载中...</p>
       </div>
@@ -216,20 +254,23 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900">
+    <div className="min-h-screen bg-[#020617] text-white">
       {/* ─── Header ─── */}
-      <nav className="border-b border-white/[0.06] bg-slate-950/90 backdrop-blur-2xl sticky top-0 z-50">
+      <nav className="border-b border-white/[0.04] bg-[#020617]/80 backdrop-blur-2xl sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2 group">
-              <Shield className="w-5 h-5 text-cyan-400" />
-              <span className="font-bold tracking-tight">AlphaSentinel</span>
+            <Link href="/" className="flex items-center gap-2.5 group">
+              <div className="relative w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-400 via-blue-500 to-violet-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:shadow-cyan-500/30 transition-all duration-300">
+                <Shield className="w-3.5 h-3.5 text-white" />
+                <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-white/20 to-transparent" />
+              </div>
+              <span className="font-bold tracking-tight bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">AlphaSentinel</span>
             </Link>
-            <div className="hidden sm:flex items-center gap-1 ml-2">
-              <Link href="/" className="px-3 py-1.5 text-sm text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">首页</Link>
-              <Link href="/grid" className="px-3 py-1.5 text-sm text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">网格量化</Link>
-              <Link href="/pricing" className="px-3 py-1.5 text-sm text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">AI 扫描</Link>
-              <Link href="/docs" className="px-3 py-1.5 text-sm text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">API 文档</Link>
+            <div className="hidden sm:flex items-center gap-0.5 ml-2">
+              <Link href="/" className="px-3 py-1.5 text-[13px] text-slate-500 hover:text-slate-200 rounded-lg hover:bg-white/[0.04] transition-all duration-200">首页</Link>
+              <Link href="/grid" className="px-3 py-1.5 text-[13px] text-slate-500 hover:text-slate-200 rounded-lg hover:bg-white/[0.04] transition-all duration-200">网格量化</Link>
+              <Link href="/pricing" className="px-3 py-1.5 text-[13px] text-slate-500 hover:text-slate-200 rounded-lg hover:bg-white/[0.04] transition-all duration-200">AI 扫描</Link>
+              <Link href="/docs" className="px-3 py-1.5 text-[13px] text-slate-500 hover:text-slate-200 rounded-lg hover:bg-white/[0.04] transition-all duration-200">API 文档</Link>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -273,29 +314,29 @@ export default function DashboardPage() {
 
         {/* ─── Stats Cards ─── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="group relative p-5 rounded-2xl bg-gradient-to-br from-amber-500/[0.08] to-orange-600/[0.04] border border-amber-500/15 hover:border-amber-500/25 transition-all duration-300">
-            <div className="flex items-center gap-2 text-xs font-medium text-amber-400/60 mb-3 tracking-wide uppercase">
+          <div className="group relative p-5 rounded-2xl bg-gradient-to-br from-amber-500/[0.08] to-orange-600/[0.04] border border-amber-500/[0.12] hover:border-amber-500/[0.2] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-amber-500/[0.06]">
+            <div className="flex items-center gap-2 text-[11px] font-semibold text-amber-400/60 mb-3 tracking-wider uppercase">
               <Coins className="w-3.5 h-3.5" />Token 余额
             </div>
             <div className="text-4xl font-extrabold text-amber-400 tracking-tight tabular-nums">{profile?.tokenBalance ?? 0}</div>
-            <div className="text-[11px] text-slate-500 mt-2">可用于扫描服务</div>
+            <div className="text-[11px] text-slate-500 mt-2">每次扫描按实际 AI 消耗扣除</div>
           </div>
-          <div className="group relative p-5 rounded-2xl bg-gradient-to-br from-cyan-500/[0.08] to-blue-600/[0.04] border border-cyan-500/15 hover:border-cyan-500/25 transition-all duration-300">
-            <div className="flex items-center gap-2 text-xs font-medium text-cyan-400/60 mb-3 tracking-wide uppercase">
+          <div className="group relative p-5 rounded-2xl bg-gradient-to-br from-cyan-500/[0.08] to-blue-600/[0.04] border border-cyan-500/[0.12] hover:border-cyan-500/[0.2] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-cyan-500/[0.06]">
+            <div className="flex items-center gap-2 text-[11px] font-semibold text-cyan-400/60 mb-3 tracking-wider uppercase">
               <TrendingUp className="w-3.5 h-3.5" />兑换费率
             </div>
             <div className="text-4xl font-extrabold text-cyan-400 tracking-tight">1<span className="text-lg text-cyan-500/60 mx-0.5">:</span>{usdtRate}</div>
-            <div className="text-[11px] text-slate-500 mt-2">1 USDT = {usdtRate} Token</div>
+            <div className="text-[11px] text-slate-500 mt-2">USDT 充值即可兑换</div>
           </div>
-          <div className="group relative p-5 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all duration-300">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-400/60 mb-3 tracking-wide uppercase">
+          <div className="group relative p-5 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20">
+            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-400/60 mb-3 tracking-wider uppercase">
               <Key className="w-3.5 h-3.5" />API 令牌
             </div>
             <div className="text-4xl font-extrabold text-slate-200 tracking-tight tabular-nums">{tokens.filter(t => !t.isRevoked).length}</div>
-            <div className="text-[11px] text-slate-500 mt-2">有效令牌数</div>
+            <div className="text-[11px] text-slate-500 mt-2">用于客户端和 API 调用扫描</div>
           </div>
-          <div className="group relative p-5 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all duration-300">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-400/60 mb-3 tracking-wide uppercase">
+          <div className="group relative p-5 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20">
+            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-400/60 mb-3 tracking-wider uppercase">
               <Activity className="w-3.5 h-3.5" />账号状态
             </div>
             <div className="text-4xl font-extrabold tracking-tight">
@@ -306,7 +347,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ─── Tabs ─── */}
-        <div className="flex gap-1 border-b border-white/[0.06] overflow-x-auto pb-px">
+        <div className="flex gap-0.5 border-b border-white/[0.05] overflow-x-auto pb-px">
           {([
             { key: 'recharge' as TabKey, label: 'USDT 充值', icon: Wallet },
             { key: 'history' as TabKey, label: '充值记录', icon: History },
@@ -317,15 +358,15 @@ export default function DashboardPage() {
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`relative flex items-center gap-2 px-5 py-3 text-[13px] font-semibold tracking-wide transition-all whitespace-nowrap ${
+              className={`relative flex items-center gap-2 px-5 py-3.5 text-[13px] font-semibold tracking-wide transition-all duration-200 whitespace-nowrap ${
                 tab === key
                   ? 'text-cyan-400'
-                  : 'text-slate-500 hover:text-slate-300'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.02]'
               }`}
             >
               <Icon className="w-4 h-4" />
               {label}
-              {tab === key && <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full" />}
+              {tab === key && <span className="absolute bottom-0 left-3 right-3 h-[2px] bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full" />}
             </button>
           ))}
         </div>
@@ -344,7 +385,7 @@ export default function DashboardPage() {
                     USDT 充值
                   </h3>
                   <p className="text-xs text-slate-500 mt-2 ml-[42px] leading-relaxed">
-                    通过 USDT 充值后兑换为 Token<br />
+                    充值 USDT 兑换为 Token，即可使用 AI 扫描服务<br />
                     费率: <span className="text-cyan-400 font-semibold">1 USDT = {usdtRate} Token</span>
                   </p>
                 </div>
@@ -437,9 +478,9 @@ export default function DashboardPage() {
                 <div className="space-y-3">
                   {[
                     { step: '1', text: '选择充值金额，创建充值订单' },
-                    { step: '2', text: '复制钱包地址，在链上转入 USDT (TRC20)' },
-                    { step: '3', text: '点击「我已支付」确认转账' },
-                    { step: '4', text: '点击「兑换 Token」将 USDT 转为 Token' },
+                    { step: '2', text: '复制收款地址，在链上转入对应金额的 USDT' },
+                    { step: '3', text: '点击「我已支付」，系统自动验证链上交易' },
+                    { step: '4', text: '确认到账后 Token 自动到账，即可使用' },
                   ].map(({ step, text }) => (
                     <div key={step} className="flex items-start gap-3">
                       <span className="w-6 h-6 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 text-cyan-400 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 border border-cyan-500/15">{step}</span>
@@ -570,7 +611,7 @@ export default function DashboardPage() {
                   <div className="w-16 h-16 rounded-2xl bg-white/[0.03] flex items-center justify-center">
                     <Wallet className="w-8 h-8 text-slate-700" />
                   </div>
-                  <p className="text-sm text-slate-500 leading-relaxed">在左侧选择金额创建充值订单后<br />这里将显示支付信息</p>
+                  <p className="text-sm text-slate-500 leading-relaxed">在左侧选择充值金额并创建订单<br />这里将显示收款地址和二维码</p>
                 </div>
               )}
 
@@ -689,7 +730,7 @@ export default function DashboardPage() {
                     <Key className="w-6 h-6 text-slate-700" />
                   </div>
                   <p className="text-sm text-slate-500">还没有创建 API 令牌</p>
-                  <p className="text-xs text-slate-600 mt-1">创建令牌后即可在 AAGS 客户端中使用扫描服务</p>
+                  <p className="text-xs text-slate-600 mt-1">创建令牌后填入 AAGS 客户端，即可开始 AI 智能扫描</p>
                 </div>
               )}
             </div>
@@ -768,7 +809,7 @@ export default function DashboardPage() {
                   <Zap className="w-6 h-6 text-slate-700" />
                 </div>
                 <p className="text-sm text-slate-500">暂无扫描记录</p>
-                <p className="text-xs text-slate-600 mt-1">使用 AAGS 客户端发起扫描后，记录会显示在这里</p>
+                <p className="text-xs text-slate-600 mt-1">在 AAGS 客户端中发起扫描，每次扫描都是一份完整的 AI 市场分析报告</p>
               </div>
             )}
             {scanTotal > 1 && (

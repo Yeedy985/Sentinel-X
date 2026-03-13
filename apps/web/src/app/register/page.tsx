@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Shield, Loader2, Mail, Lock, User } from 'lucide-react';
+import { Shield, Loader2, Mail, Lock, User, ArrowLeft, Sparkles } from 'lucide-react';
 import { api, setToken } from '@/lib/api';
 
 export default function RegisterPage() {
@@ -27,107 +27,129 @@ export default function RegisterPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
-    const res = await api.register({ email, password, nickname: nickname || undefined });
-    if (res.success && res.data) {
-      const data = res.data as any;
-      setToken(data.token);
-      router.push('/dashboard');
-    } else {
-      setError(res.error || '注册失败');
+    try {
+      const res = await api.register({ email, password, nickname: nickname || undefined });
+      if (res.success && res.data) {
+        const data = res.data as any;
+        setToken(data.token);
+        router.push('/dashboard');
+      } else {
+        setError(res.error || '注册失败');
+      }
+    } catch {
+      setError('连接服务器失败，请检查网络后重试');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-10">
-          <Link href="/" className="inline-flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:shadow-cyan-500/30 transition-shadow">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-[#020617] relative overflow-hidden">
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[400px] bg-cyan-500/[0.04] rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/3 w-[300px] h-[300px] bg-violet-500/[0.03] rounded-full blur-[120px] pointer-events-none" />
+
+      <Link href="/" className="absolute top-6 left-6 flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors">
+        <ArrowLeft className="w-4 h-4" /> 返回首页
+      </Link>
+
+      <div className="relative w-full max-w-sm">
+        <div className="text-center mb-8">
+          <Link href="/" className="inline-flex items-center gap-2.5 group">
+            <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 via-blue-500 to-violet-500 flex items-center justify-center shadow-lg shadow-cyan-500/25 group-hover:shadow-cyan-500/40 transition-all duration-300 group-hover:scale-105">
               <Shield className="w-5 h-5 text-white" />
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent" />
             </div>
-            <span className="text-2xl font-extrabold tracking-tight">AlphaSentinel</span>
+            <span className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">AlphaSentinel</span>
           </Link>
-          <p className="text-slate-500 mt-3 text-sm">创建你的账号</p>
+          <p className="text-slate-400 mt-3 text-sm">注册即可体验 AI 驱动的加密市场智能扫描</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {error && (
-            <div className="p-4 rounded-xl bg-red-500/[0.08] border border-red-500/20 text-red-300 text-sm font-medium flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-              {error}
+        {bonusTokens != null && bonusTokens > 0 && (
+          <div className="mb-5 p-3.5 rounded-xl bg-gradient-to-r from-emerald-500/[0.06] to-cyan-500/[0.04] border border-emerald-500/[0.12] flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20">
+              <Sparkles className="w-4 h-4 text-white" />
             </div>
-          )}
-
-          <div>
-            <label className="text-[11px] font-medium text-slate-500 block mb-2 uppercase tracking-wider">昵称 (可选)</label>
-            <div className="relative">
-              <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-              <input
-                type="text"
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 focus:outline-none transition-all"
-                placeholder="你的昵称"
-              />
-            </div>
+            <p className="text-sm text-emerald-300 font-medium">
+              注册即送 <span className="text-emerald-200 font-bold">{bonusTokens.toLocaleString()}</span> Token，足够体验多次完整的 AI 市场扫描
+            </p>
           </div>
+        )}
 
-          <div>
-            <label className="text-[11px] font-medium text-slate-500 block mb-2 uppercase tracking-wider">邮箱</label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 focus:outline-none transition-all"
-                placeholder="your@email.com"
-                required
-              />
+        <div className="p-7 rounded-2xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-sm">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="p-3.5 rounded-xl bg-red-500/[0.08] border border-red-500/15 text-red-300 text-[13px] font-medium flex items-center gap-2.5">
+                <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label className="text-[11px] font-semibold text-slate-500 block mb-2 uppercase tracking-wider">昵称 <span className="normal-case text-slate-600">(可选)</span></label>
+              <div className="relative">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-[14px] text-white placeholder-slate-600 focus:border-cyan-500/40 focus:bg-white/[0.04] focus:outline-none transition-all duration-200"
+                  placeholder="你的昵称"
+                />
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="text-[11px] font-medium text-slate-500 block mb-2 uppercase tracking-wider">密码</label>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 focus:outline-none transition-all"
-                placeholder="至少6位密码"
-                required
-                minLength={6}
-              />
+            <div>
+              <label className="text-[11px] font-semibold text-slate-500 block mb-2 uppercase tracking-wider">邮箱</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-[14px] text-white placeholder-slate-600 focus:border-cyan-500/40 focus:bg-white/[0.04] focus:outline-none transition-all duration-200"
+                  placeholder="your@email.com"
+                  required
+                />
+              </div>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-40 rounded-xl font-bold text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/15 hover:shadow-cyan-500/25"
-          >
-            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            注册
-          </button>
-        </form>
+            <div>
+              <label className="text-[11px] font-semibold text-slate-500 block mb-2 uppercase tracking-wider">密码</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-[14px] text-white placeholder-slate-600 focus:border-cyan-500/40 focus:bg-white/[0.04] focus:outline-none transition-all duration-200"
+                  placeholder="至少6位密码"
+                  required
+                  minLength={6}
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="group relative w-full py-3.5 rounded-xl font-bold text-[14px] overflow-hidden transition-all duration-300 disabled:opacity-40 hover:shadow-lg hover:shadow-cyan-500/20 hover:-translate-y-0.5 active:translate-y-0 mt-1"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-600" />
+              <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <span className="relative flex items-center justify-center gap-2">
+                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                注册
+              </span>
+            </button>
+          </form>
+        </div>
 
         <p className="text-center text-sm text-slate-500 mt-8">
           已有账号？{' '}
-          <Link href="/login" className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors">
+          <Link href="/login" className="text-cyan-400 hover:text-cyan-300 font-semibold transition-colors">
             登录
           </Link>
         </p>
-
-        <div className="mt-6 p-4 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/15 text-center">
-          <p className="text-xs text-emerald-400 font-medium">
-            {bonusTokens != null && bonusTokens > 0
-              ? `注册即赠送 ${bonusTokens.toLocaleString()} Token，可立即体验扫描服务`
-              : '注册后可体验扫描服务'}
-          </p>
-        </div>
       </div>
     </div>
   );

@@ -170,8 +170,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<ApiR
       if (typeof window !== 'undefined') window.location.href = '/login';
     }
     return data;
-  } catch {
-    throw new Error('Backend unreachable');
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Backend unreachable' };
   }
 }
 

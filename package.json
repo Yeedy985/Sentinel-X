@@ -9,9 +9,12 @@
     "db:generate": "pnpm --filter @sentinel/db generate",
     "db:push": "pnpm --filter @sentinel/db push",
     "db:migrate": "pnpm --filter @sentinel/db migrate",
-    "db:seed": "pnpm --filter @sentinel/db seed"
+    "db:seed": "pnpm --filter @sentinel/db seed",
+    "test": "npx playwright test",
+    "test:ui": "npx playwright test --ui"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "turbo": "^2.3.0",
     "typescript": "^5.7.0"
   },

@@ -291,15 +291,16 @@ function CodeBlock({ code, lang = 'json' }: { code: string; lang?: string }) {
     setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <div className="relative group">
+    <div className="relative group rounded-xl overflow-hidden">
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
       <button
         onClick={handleCopy}
-        className="absolute top-2 right-2 p-1.5 rounded-md bg-slate-700/50 text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
+        className="absolute top-3 right-3 p-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-slate-500 hover:text-white hover:bg-white/[0.08] opacity-0 group-hover:opacity-100 transition-all duration-200"
       >
         {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
       </button>
-      <pre className="p-4 rounded-lg bg-slate-950 border border-slate-800 text-sm overflow-x-auto">
-        <code className={`language-${lang} text-slate-300`}>{code}</code>
+      <pre className="p-5 bg-[#0a0f1e] border border-white/[0.06] rounded-xl text-[13px] overflow-x-auto">
+        <code className={`language-${lang} text-slate-300 leading-relaxed`}>{code}</code>
       </pre>
     </div>
   );
@@ -307,31 +308,31 @@ function CodeBlock({ code, lang = 'json' }: { code: string; lang?: string }) {
 
 function EndpointCard({ ep, defaultOpen = false }: { ep: ApiEndpoint; defaultOpen?: boolean }) {
   const methodColor: Record<string, string> = {
-    GET: 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30',
-    POST: 'bg-blue-600/20 text-blue-400 border-blue-500/30',
-    DELETE: 'bg-red-600/20 text-red-400 border-red-500/30',
+    GET: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    POST: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    DELETE: 'bg-red-500/10 text-red-400 border-red-500/20',
   };
 
   return (
-    <details open={defaultOpen} className="rounded-xl border border-slate-800/50 overflow-hidden group/ep">
-      <summary className="flex items-center gap-3 p-4 cursor-pointer hover:bg-slate-800/30 transition-colors list-none [&::-webkit-details-marker]:hidden">
-        <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${methodColor[ep.method]}`}>
+    <details open={defaultOpen} className="rounded-2xl border border-white/[0.06] bg-white/[0.01] overflow-hidden group/ep hover:border-white/[0.1] transition-colors duration-200">
+      <summary className="flex items-center gap-3 p-5 cursor-pointer hover:bg-white/[0.02] transition-colors duration-200 list-none [&::-webkit-details-marker]:hidden">
+        <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${methodColor[ep.method]}`}>
           {ep.method}
         </span>
-        <code className="text-sm text-cyan-400 font-mono">{ep.path}</code>
-        <span className="text-sm text-slate-400 ml-2">{ep.title}</span>
-        <span className={`ml-auto text-xs px-2 py-0.5 rounded-full border ${
-          ep.auth === 'API Token' ? 'bg-amber-600/10 text-amber-400 border-amber-500/20'
-          : ep.auth === 'JWT' ? 'bg-violet-600/10 text-violet-400 border-violet-500/20'
-          : 'bg-slate-700/50 text-slate-500 border-slate-600/30'
+        <code className="text-[13px] text-cyan-400 font-mono">{ep.path}</code>
+        <span className="text-[13px] text-slate-400 ml-2 font-medium">{ep.title}</span>
+        <span className={`ml-auto text-[11px] px-2.5 py-1 rounded-lg border font-medium ${
+          ep.auth === 'API Token' ? 'bg-amber-500/[0.08] text-amber-400 border-amber-500/15'
+          : ep.auth === 'JWT' ? 'bg-violet-500/[0.08] text-violet-400 border-violet-500/15'
+          : 'bg-white/[0.03] text-slate-500 border-white/[0.06]'
         }`}>
           {ep.auth}
         </span>
-        <ChevronDown className="w-4 h-4 text-slate-500 transition-transform duration-200 group-open/ep:rotate-180" />
+        <ChevronDown className="w-4 h-4 text-slate-600 transition-transform duration-200 group-open/ep:rotate-180" />
       </summary>
 
-      <div className="px-4 pb-4 space-y-4 border-t border-slate-800/50 pt-4">
-        <p className="text-sm text-slate-400">{ep.desc}</p>
+      <div className="px-5 pb-5 space-y-5 border-t border-white/[0.04] pt-5">
+        <p className="text-[13px] text-slate-400 leading-relaxed">{ep.desc}</p>
 
         {/* Headers */}
         {Object.keys(ep.headers).length > 0 && (
@@ -408,12 +409,12 @@ function EndpointCard({ ep, defaultOpen = false }: { ep: ApiEndpoint; defaultOpe
 
         {/* Notes */}
         {ep.notes && ep.notes.length > 0 && (
-          <div className="p-3 rounded-lg bg-slate-800/30 border border-slate-700/30">
-            <h5 className="text-xs font-semibold text-slate-500 mb-2">备注</h5>
-            <ul className="space-y-1">
+          <div className="p-4 rounded-xl bg-white/[0.015] border border-white/[0.05]">
+            <h5 className="text-[11px] font-semibold text-slate-500 mb-2.5 uppercase tracking-wider">备注</h5>
+            <ul className="space-y-1.5">
               {ep.notes.map((n, i) => (
-                <li key={i} className="text-xs text-slate-400 flex items-start gap-1.5">
-                  <span className="text-cyan-500 mt-0.5">•</span> {n}
+                <li key={i} className="text-[12px] text-slate-400 flex items-start gap-2 leading-relaxed">
+                  <span className="text-cyan-400/60 mt-0.5 shrink-0">•</span> {n}
                 </li>
               ))}
             </ul>
@@ -449,51 +450,60 @@ export default function DocsPage() {
   const userEndpoints = API_ENDPOINTS.filter(ep => ep.path.startsWith('/api/user'));
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-[#020617] text-white overflow-x-hidden">
       <Navbar />
 
-      <div className="pt-20 pb-20 px-6">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 text-sm mb-4">
-              <FileCode className="w-4 h-4" />
-              开发者接口
+      {/* ═══════ Hero ═══════ */}
+      <section className="relative pt-28 pb-8 sm:pt-32 sm:pb-12 px-5 sm:px-8 text-center overflow-hidden">
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-violet-500/[0.04] rounded-full blur-[150px] pointer-events-none" />
+        <div className="relative">
+          <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-violet-500/[0.08] border border-violet-500/[0.15] text-sm font-medium mb-6">
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+              <FileCode className="w-3.5 h-3.5 text-white" />
             </div>
-            <h1 className="text-3xl font-bold mb-4">API 接口文档</h1>
-            <p className="text-slate-500 max-w-2xl mx-auto">
-              通过 RESTful API 接入 AlphaSentinel 300 信号扫描服务。所有扫描相关接口使用 API Token 认证，
-              用户管理接口使用 JWT 认证。
-            </p>
+            <span className="text-violet-300">开发者接口</span>
           </div>
+          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4">
+            <span className="bg-gradient-to-r from-violet-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">API 接口文档</span>
+          </h1>
+          <p className="text-base text-slate-400 max-w-2xl mx-auto leading-relaxed">
+            将 AlphaSentinel 的 AI 扫描能力集成到你自己的交易系统或机器人，几行代码即可接入 300+ 信号扫描服务。
+          </p>
+        </div>
+      </section>
+
+      <div className="px-5 sm:px-8 pb-20">
+        <div className="max-w-5xl mx-auto">
 
           {/* Base URL */}
-          <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/50 mb-8">
-            <div className="flex items-center justify-between">
+          <div className="relative p-5 rounded-2xl bg-white/[0.02] border border-white/[0.06] mb-10 overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-violet-500/30 to-transparent" />
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <span className="text-xs text-slate-500 uppercase tracking-wider">Base URL</span>
-                <div className="flex items-center gap-2 mt-1">
-                  <code className="text-lg font-mono text-cyan-400">{API_BASE}</code>
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Base URL</span>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <code className="text-[17px] font-mono font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">{API_BASE}</code>
                 </div>
               </div>
-              <div className="text-right">
-                <span className="text-xs text-slate-500 uppercase tracking-wider">认证方式</span>
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="text-xs px-2 py-1 rounded-full bg-amber-600/10 text-amber-400 border border-amber-500/20">
-                    API Token — 扫描接口
-                  </span>
-                  <span className="text-xs px-2 py-1 rounded-full bg-violet-600/10 text-violet-400 border border-violet-500/20">
-                    JWT — 用户管理
-                  </span>
-                </div>
+              <div className="flex items-center gap-2.5">
+                <span className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/[0.06] text-amber-400 border border-amber-500/[0.12] font-medium">
+                  API Token — 扫描接口
+                </span>
+                <span className="text-xs px-3 py-1.5 rounded-lg bg-violet-500/[0.06] text-violet-400 border border-violet-500/[0.12] font-medium">
+                  JWT — 用户管理
+                </span>
               </div>
             </div>
           </div>
 
           {/* Quick Start */}
-          <div className="mb-10">
-            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <Zap className="w-5 h-5 text-amber-400" /> 快速开始
-            </h3>
+          <div className="mb-14">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                <Zap className="w-4 h-4 text-white" />
+              </div>
+              <h3 className="text-xl font-bold tracking-tight">快速开始</h3>
+            </div>
             <CodeBlock lang="bash" code={`# 1. 注册账号
 curl -X POST ${API_BASE}/api/auth/register \\
   -H "Content-Type: application/json" \\
@@ -523,11 +533,16 @@ curl ${API_BASE}/api/scan/briefings?limit=1 \\
           </div>
 
           {/* Scan Endpoints */}
-          <div className="mb-10">
-            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <Brain className="w-5 h-5 text-cyan-400" /> 扫描接口
-              <span className="text-xs text-slate-500 font-normal ml-1">核心功能 — 使用 API Token 认证</span>
-            </h3>
+          <div className="mb-14">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                <Brain className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold tracking-tight">扫描接口</h3>
+                <p className="text-sm text-slate-400">核心功能 — 发起扫描、获取简报、SSE 实时推送</p>
+              </div>
+            </div>
             <div className="space-y-3">
               {scanEndpoints.map((ep, i) => (
                 <EndpointCard key={ep.path} ep={ep} defaultOpen={i === 0} />
@@ -536,11 +551,16 @@ curl ${API_BASE}/api/scan/briefings?limit=1 \\
           </div>
 
           {/* Auth Endpoints */}
-          <div className="mb-10">
-            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <Lock className="w-5 h-5 text-rose-400" /> 认证接口
-              <span className="text-xs text-slate-500 font-normal ml-1">注册登录 — 无需认证</span>
-            </h3>
+          <div className="mb-14">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center shadow-lg shadow-rose-500/20">
+                <Lock className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold tracking-tight">认证接口</h3>
+                <p className="text-sm text-slate-400">注册、登录 — 无需认证即可调用</p>
+              </div>
+            </div>
             <div className="space-y-3">
               {authEndpoints.map((ep) => (
                 <EndpointCard key={ep.path} ep={ep} />
@@ -549,22 +569,28 @@ curl ${API_BASE}/api/scan/briefings?limit=1 \\
           </div>
 
           {/* User Endpoints */}
-          <div className="mb-10">
-            <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <Shield className="w-5 h-5 text-violet-400" /> 用户接口
-              <span className="text-xs text-slate-500 font-normal ml-1">Token 管理 — 使用 JWT 认证</span>
-            </h3>
+          <div className="mb-14">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+                <Shield className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold tracking-tight">用户接口</h3>
+                <p className="text-sm text-slate-400">API Token 的创建、列表和吁销管理</p>
+              </div>
+            </div>
             <div className="space-y-3">
               {userEndpoints.map((ep) => (
-                <EndpointCard key={ep.path} ep={ep} />
+                <EndpointCard key={`${ep.method} ${ep.path}`} ep={ep} />
               ))}
             </div>
           </div>
 
           {/* Error Format */}
-          <div className="p-6 rounded-xl bg-slate-900/50 border border-slate-800/50">
-            <h3 className="text-lg font-semibold mb-3">通用错误格式</h3>
-            <p className="text-sm text-slate-400 mb-3">所有接口在失败时返回统一的错误格式：</p>
+          <div className="relative p-7 rounded-2xl bg-white/[0.02] border border-white/[0.06] overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-500/20 to-transparent" />
+            <h3 className="text-lg font-bold mb-3 tracking-tight">通用错误格式</h3>
+            <p className="text-sm text-slate-400 mb-4">所有接口失败时返回统一的 JSON 错误格式：</p>
             <CodeBlock code={`{
   "success": false,
   "error": "错误描述信息"
@@ -593,37 +619,45 @@ curl ${API_BASE}/api/scan/briefings?limit=1 \\
           </div>
 
           {/* Signal Matrix Reference */}
-          <div className="mt-8 p-6 rounded-xl bg-gradient-to-b from-cyan-900/10 to-slate-900/50 border border-cyan-500/15">
-            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-cyan-400" /> 300 信号矩阵参考
-            </h3>
-            <p className="text-sm text-slate-400 mb-4">
-              扫描结果中的 <code className="text-cyan-400">triggeredSignals[].signalId</code> 对应以下 10 大信号组：
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
-              {[
-                { id: 'G1', name: 'BTC 核心', range: '1~30' },
-                { id: 'G2', name: 'ETH 生态', range: '31~60' },
-                { id: 'G3', name: '山寨/Meme', range: '61~90' },
-                { id: 'G4', name: 'DeFi/CEX', range: '91~120' },
-                { id: 'G5', name: '宏观经济', range: '121~150' },
-                { id: 'G6', name: '监管政策', range: '151~180' },
-                { id: 'G7', name: '技术指标', range: '181~210' },
-                { id: 'G8', name: '链上数据', range: '211~240' },
-                { id: 'G9', name: '市场情绪', range: '241~270' },
-                { id: 'G10', name: '黑天鹅', range: '271~300' },
-              ].map((g) => (
-                <div key={g.id} className="p-2 rounded-lg bg-slate-800/50 border border-slate-700/30">
-                  <span className="text-cyan-400 font-bold">{g.id}</span>
-                  <span className="text-slate-400 ml-1.5">{g.name}</span>
-                  <div className="text-slate-600 mt-0.5">#{g.range}</div>
+          <div className="relative mt-12 p-7 rounded-2xl overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/[0.04] via-blue-500/[0.02] to-transparent" />
+            <div className="absolute inset-0 border border-cyan-500/[0.12] rounded-2xl" />
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/3 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" />
+            <div className="relative">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                  <BarChart3 className="w-4 h-4 text-white" />
                 </div>
-              ))}
+                <h3 className="text-lg font-bold tracking-tight">300 信号矩阵参考</h3>
+              </div>
+              <p className="text-sm text-slate-400 mb-5">
+                每次扫描结果中的 <code className="text-cyan-400 bg-cyan-500/[0.08] px-1.5 py-0.5 rounded">triggeredSignals</code> 包含被触发的信号，对应以下 10 大信号组：
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 text-xs">
+                {[
+                  { id: 'G1', name: 'BTC 核心', range: '1~30' },
+                  { id: 'G2', name: 'ETH 生态', range: '31~60' },
+                  { id: 'G3', name: '山寨/Meme', range: '61~90' },
+                  { id: 'G4', name: 'DeFi/CEX', range: '91~120' },
+                  { id: 'G5', name: '宏观经济', range: '121~150' },
+                  { id: 'G6', name: '监管政策', range: '151~180' },
+                  { id: 'G7', name: '技术指标', range: '181~210' },
+                  { id: 'G8', name: '链上数据', range: '211~240' },
+                  { id: 'G9', name: '市场情绪', range: '241~270' },
+                  { id: 'G10', name: '黑天鹅', range: '271~300' },
+                ].map((g) => (
+                  <div key={g.id} className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-colors">
+                    <span className="text-cyan-400 font-bold">{g.id}</span>
+                    <span className="text-slate-300 ml-1.5 font-medium">{g.name}</span>
+                    <div className="text-slate-600 mt-0.5">#{g.range}</div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500 mt-4 leading-relaxed">
+                每条信号包含影响力(impact)、置信度(confidence)、类别(D=方向/V=波动/R=风险) 三大维度，
+                综合计算后输出 SD(方向) / SV(波动) / SR(风险) 三大核心可执行指数。
+              </p>
             </div>
-            <p className="text-xs text-slate-600 mt-3">
-              每条信号包含 impact(-10~+10)、confidence(0~1)、category(D=方向/V=波动/R=风险) 三大维度，
-              经过时间衰减 + 置信度加权 + tanh 压缩后输出 SD/SV/SR 三大核心指数。
-            </p>
           </div>
         </div>
       </div>
