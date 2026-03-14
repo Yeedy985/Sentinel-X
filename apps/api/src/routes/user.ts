@@ -223,98 +223,103 @@ async function unlockExpiredPaymentAddresses() {
 
 // ── 创建 USDT 充值订单 ──
 userRoutes.post('/recharge', async (c) => {
-  const userId = c.get('userId');
-  const body = await c.req.json<{ amount: number; network?: string }>().catch(() => ({ amount: 0, network: undefined }));
-  const amount = Number(body.amount);
-  const network = (body.network === 'ERC20' ? 'ERC20' : 'TRC20') as 'TRC20' | 'ERC20';
+  try {
+    const userId = c.get('userId');
+    const body = await c.req.json<{ amount: number; network?: string }>().catch(() => ({ amount: 0, network: undefined }));
+    const amount = Number(body.amount);
+    const network = (body.network === 'ERC20' ? 'ERC20' : 'TRC20') as 'TRC20' | 'ERC20';
 
-  if (!amount || amount < MIN_USDT_RECHARGE) {
-    return c.json<ApiResponse>({ success: false, error: `最低充值 ${MIN_USDT_RECHARGE} USDT` }, 400);
-  }
+    if (!amount || amount < MIN_USDT_RECHARGE) {
+      return c.json<ApiResponse>({ success: false, error: `最低充值 ${MIN_USDT_RECHARGE} USDT` }, 400);
+    }
 
-  // 检查用户当前 PENDING 订单数量，最多3个
-  const pendingCount = await db.rechargeRecord.count({ where: { userId, status: 'PENDING' } });
-  if (pendingCount >= 3) {
-    return c.json<ApiResponse>({ success: false, error: '您当前有 3 笔支付订单正在处理中，请等待前面的订单完成后再发起新的订单' }, 429);
-  }
+    // 检查用户当前 PENDING 订单数量，最多3个
+    const pendingCount = await db.rechargeRecord.count({ where: { userId, status: 'PENDING' } });
+    if (pendingCount >= 3) {
+      return c.json<ApiResponse>({ success: false, error: '您当前有 3 笔支付订单正在处理中，请等待前面的订单完成后再发起新的订单' }, 429);
+    }
 
-  // 先解锁过期地址
-  await unlockExpiredPaymentAddresses();
+    // 先解锁过期地址
+    await unlockExpiredPaymentAddresses();
 
-  // 从数据库分配一个空闲地址，锁定时间从设置读取（默认15分钟）
-  const lockMinutes = Number(await getSetting('address_lock_minutes', 15));
-  const lockExpiresAt = new Date(Date.now() + lockMinutes * 60 * 1000);
+    // 从数据库分配一个空闲地址，锁定时间从设置读取（默认15分钟）
+    const lockMinutes = Number(await getSetting('address_lock_minutes', 15));
+    const lockExpiresAt = new Date(Date.now() + lockMinutes * 60 * 1000);
 
-  // 在事务中原子地：创建订单 + 分配并锁定地址（FOR UPDATE SKIP LOCKED 防并发冲突）
-  const result = await db.$transaction(async (tx) => {
-    // 创建充值记录
-    const record = await tx.rechargeRecord.create({
-      data: {
-        userId,
-        amount: BigInt(Math.round(amount * 100)),
-        method: 'USDT',
-        status: 'PENDING',
-        note: `${amount} USDT via ${network}`,
-      },
-    });
-
-    // 原子抢占空闲地址：先找一个 IDLE 地址，再用 updateMany 带条件更新（只有仍为 IDLE 才成功）
-    // 如果并发时被别人先抢了，updateMany 返回 count=0，重试下一个
-    const idleCandidates = await tx.paymentAddress.findMany({
-      where: { network, status: 'IDLE' },
-      orderBy: { id: 'asc' },
-      take: 10,
-      select: { id: true, address: true },
-    });
-
-    let walletAddress = '';
-    let grabbed = false;
-
-    for (const candidate of idleCandidates) {
-      // 带条件更新：只有状态仍为 IDLE 时才锁定（原子操作，防并发）
-      const updated = await tx.paymentAddress.updateMany({
-        where: { id: candidate.id, status: 'IDLE' },
+    // 在事务中原子地：创建订单 + 分配并锁定地址（FOR UPDATE SKIP LOCKED 防并发冲突）
+    const result = await db.$transaction(async (tx) => {
+      // 创建充值记录
+      const record = await tx.rechargeRecord.create({
         data: {
-          status: 'LOCKED',
-          lockExpiresAt,
-          lockedByUser: userId,
-          lockedOrderId: record.id,
+          userId,
+          amount: BigInt(Math.round(amount * 100)),
+          method: 'USDT',
+          status: 'PENDING',
+          note: `${amount} USDT via ${network}`,
         },
       });
-      if (updated.count > 0) {
-        walletAddress = candidate.address;
-        grabbed = true;
-        break;
+
+      // 原子抢占空闲地址：先找一个 IDLE 地址，再用 updateMany 带条件更新（只有仍为 IDLE 才成功）
+      // 如果并发时被别人先抢了，updateMany 返回 count=0，重试下一个
+      const idleCandidates = await tx.paymentAddress.findMany({
+        where: { network, status: 'IDLE' },
+        orderBy: { id: 'asc' },
+        take: 10,
+        select: { id: true, address: true },
+      });
+
+      let walletAddress = '';
+      let grabbed = false;
+
+      for (const candidate of idleCandidates) {
+        // 带条件更新：只有状态仍为 IDLE 时才锁定（原子操作，防并发）
+        const updated = await tx.paymentAddress.updateMany({
+          where: { id: candidate.id, status: 'IDLE' },
+          data: {
+            status: 'LOCKED',
+            lockExpiresAt,
+            lockedByUser: userId,
+            lockedOrderId: record.id,
+          },
+        });
+        if (updated.count > 0) {
+          walletAddress = candidate.address;
+          grabbed = true;
+          break;
+        }
+        // count=0 说明被别人抢了，试下一个
       }
-      // count=0 说明被别人抢了，试下一个
+
+      if (!grabbed) {
+        await tx.rechargeRecord.delete({ where: { id: record.id } });
+        return { noAddress: true } as any;
+      }
+
+      return { record, walletAddress, noAddress: false };
+    });
+
+    if (result.noAddress) {
+      return c.json<ApiResponse>({ success: false, error: `当前 ${network} 通道充值繁忙，请稍后再试或切换其他网络` }, 503);
     }
 
-    if (!grabbed) {
-      await tx.rechargeRecord.delete({ where: { id: record.id } });
-      return { noAddress: true } as any;
-    }
+    const orderExpiresAt = new Date(Date.now() + RECHARGE_EXPIRY_MINUTES * 60 * 1000);
 
-    return { record, walletAddress, noAddress: false };
-  });
-
-  if (result.noAddress) {
-    return c.json<ApiResponse>({ success: false, error: `当前 ${network} 通道充值繁忙，请稍后再试或切换其他网络` }, 503);
+    return c.json<ApiResponse<RechargeOrderResponse>>({
+      success: true,
+      data: {
+        id: result.record.id,
+        usdtAmount: amount,
+        walletAddress: result.walletAddress,
+        network,
+        status: 'PENDING',
+        expiresAt: orderExpiresAt.toISOString(),
+        lockExpiresAt: result.addressLocked ? lockExpiresAt.toISOString() : undefined,
+      } as any,
+    }, 201);
+  } catch (err: any) {
+    console.error('recharge error:', err.message);
+    return c.json<ApiResponse>({ success: false, error: '当前充值通道繁忙，请稍后再试' }, 503);
   }
-
-  const orderExpiresAt = new Date(Date.now() + RECHARGE_EXPIRY_MINUTES * 60 * 1000);
-
-  return c.json<ApiResponse<RechargeOrderResponse>>({
-    success: true,
-    data: {
-      id: result.record.id,
-      usdtAmount: amount,
-      walletAddress: result.walletAddress,
-      network,
-      status: 'PENDING',
-      expiresAt: orderExpiresAt.toISOString(),
-      lockExpiresAt: result.addressLocked ? lockExpiresAt.toISOString() : undefined,
-    } as any,
-  }, 201);
 });
 
 // ── 充值记录 ──

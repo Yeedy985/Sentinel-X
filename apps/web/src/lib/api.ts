@@ -9,7 +9,7 @@ interface ApiResponse<T = unknown> {
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
-const DEV_MODE = false; // 生产走真实 API；本地测试时改为 process.env.NODE_ENV === 'development'
+const DEV_MODE = false; // 始终走真实 API，不使用 mock 数据
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -30,13 +30,13 @@ export function isLoggedIn(): boolean {
 
 /* ──────────── Dev Mock Data ──────────── */
 const MOCK_USER = { email: 'demo@alphinel.com', password: 'demo123' };
-let mockBalance = 5;
+let mockBalance = 20000;
 let mockTokenIdCounter = 2;
 const mockTokens = [
   { id: 1, tokenPrefix: 'stx_abcd1234', name: 'Default Token', lastUsedAt: null, isRevoked: false, createdAt: '2026-03-01T10:00:00Z' },
 ];
 const mockTransactions: { id: number; type: string; amount: number; balanceAfter: number; refId: string | null; description: string; createdAt: string }[] = [
-  { id: 1, type: 'RECHARGE', amount: 5, balanceAfter: 5, refId: null, description: '注册赠送', createdAt: '2026-03-01T10:00:00Z' },
+  { id: 1, type: 'RECHARGE', amount: 20000, balanceAfter: 20000, refId: null, description: '注册赠送', createdAt: '2026-03-01T10:00:00Z' },
 ];
 const mockScans: any[] = [
   { id: 1, briefingId: 'brf-a1b2c3', status: 'COMPLETED', isCached: false, enableSearch: true, tokenCost: 2, signalCount: 12, alertCount: 2, realCostUsd: 0.0068, startedAt: '2026-03-11T00:01:15Z', completedAt: '2026-03-11T00:01:53Z' },
@@ -53,7 +53,7 @@ function getMockResponse(path: string, options: RequestInit = {}): any {
   const method = options.method || 'GET';
 
   if (path === '/api/auth/site-config' && method === 'GET') {
-    return mockOk({ registrationEnabled: true, newUserBonusTokens: 5, announcement: null });
+    return mockOk({ registrationEnabled: true, newUserBonusTokens: 20000, announcement: null });
   }
   if (path === '/api/auth/register' && method === 'POST') {
     return mockOk({
@@ -72,7 +72,7 @@ function getMockResponse(path: string, options: RequestInit = {}): any {
     return mockErr('邮箱或密码错误 (Dev模式: demo@alphinel.com / demo123)');
   }
   if (path === '/api/user/config') {
-    return mockOk({ usdtToTokenRate: 10 });
+    return mockOk({ usdtToTokenRate: 200000 });
   }
   if (path === '/api/user/profile') {
     return mockOk({ id: 1, email: MOCK_USER.email, nickname: 'Demo User', tokenBalance: mockBalance, status: 'ACTIVE', createdAt: '2026-03-01T10:00:00Z' });
@@ -103,14 +103,18 @@ function getMockResponse(path: string, options: RequestInit = {}): any {
   if (path === '/api/user/recharge' && method === 'POST') {
     const body = JSON.parse(options.body as string || '{}');
     const id = Date.now();
+    const network = body.network === 'ERC20' ? 'ERC20' : 'TRC20';
+    const walletAddress = network === 'ERC20'
+      ? '0xYourERC20WalletAddressHere'
+      : 'TYourTRC20WalletAddressHere';
     mockRecharges.unshift({
       id, amount: body.amount, method: 'USDT', txRef: null,
-      status: 'PENDING', note: `${body.amount} USDT via TRC20`,
+      status: 'PENDING', note: `${body.amount} USDT via ${network}`,
       createdAt: new Date().toISOString(),
     });
     return mockOk({
       id, usdtAmount: body.amount,
-      walletAddress: 'TYourTRC20WalletAddressHere', network: 'TRC20',
+      walletAddress, network,
       status: 'PENDING', expiresAt: new Date(Date.now() + 3600000).toISOString(),
     });
   }
@@ -165,22 +169,34 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<ApiR
     const res = await fetch(url, { ...options, headers });
 
     if (res.status === 401) {
+      // 登录/注册接口的 401 是"凭据错误"，不应触发重定向
+      const isAuthEndpoint = path.startsWith('/api/auth/');
+      if (isAuthEndpoint) {
+        // 直接解析后端返回的错误信息
+        try {
+          const data = await res.json();
+          return data;
+        } catch {
+          return { success: false, error: '邮箱或密码错误' };
+        }
+      }
+      // 其它接口的 401 是"token 过期"，清除并跳转登录
       clearToken();
       if (typeof window !== 'undefined') window.location.href = '/login';
       return { success: false, error: '登录已过期，请重新登录' };
     }
 
-    // 安全解析 JSON — 后端可能返回非 JSON（如 502/500 纯文本）
-    const contentType = res.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
-      return { success: false, error: `服务器错误 (${res.status})` };
-    }
-
+    // 尝试解析 JSON，不管 content-type 是什么
     let data: any;
     try {
       data = await res.json();
     } catch {
-      return { success: false, error: `服务器返回了无效数据 (${res.status})` };
+      // JSON 解析失败 — 后端返回了非 JSON（如 502/500 纯文本）
+      console.error(`[API] ${path} → ${res.status} non-JSON response`);
+      const friendly = res.status >= 500
+        ? '服务器繁忙，请稍后再试'
+        : `请求失败 (${res.status})`;
+      return { success: false, error: friendly };
     }
 
     return data;

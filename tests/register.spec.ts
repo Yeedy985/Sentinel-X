@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { uniqueEmail, TEST_PASSWORD } from './helpers';
 
 test.describe('/register 注册页', () => {
   test.beforeEach(async ({ page }) => {
@@ -80,18 +81,20 @@ test.describe('/register 注册页', () => {
 
   // ── 注册业务 ──
   test('正确填写注册: 跳转到 /dashboard', async ({ page }) => {
-    await page.locator('input[type="email"]').fill('newuser@test.com');
-    await page.locator('input[type="password"]').fill('password123');
+    const email = uniqueEmail('reg');
+    await page.locator('input[type="email"]').fill(email);
+    await page.locator('input[type="password"]').fill(TEST_PASSWORD);
     await page.locator('button[type="submit"]').click();
-    await page.waitForURL('**/dashboard', { timeout: 10000 });
+    await page.waitForURL('**/dashboard', { timeout: 15000 });
     expect(page.url()).toContain('/dashboard');
   });
 
   test('注册成功后: localStorage 存储了 token', async ({ page }) => {
-    await page.locator('input[type="email"]').fill('newuser2@test.com');
-    await page.locator('input[type="password"]').fill('password123');
+    const email = uniqueEmail('reg2');
+    await page.locator('input[type="email"]').fill(email);
+    await page.locator('input[type="password"]').fill(TEST_PASSWORD);
     await page.locator('button[type="submit"]').click();
-    await page.waitForURL('**/dashboard', { timeout: 10000 });
+    await page.waitForURL('**/dashboard', { timeout: 15000 });
     const token = await page.evaluate(() => localStorage.getItem('sentinel_token'));
     expect(token).toBeTruthy();
   });

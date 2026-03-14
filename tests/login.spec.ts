@@ -1,13 +1,22 @@
 import { test, expect } from '@playwright/test';
+import { registerUserViaApi, TEST_PASSWORD } from './helpers';
+
+// 在所有测试前通过真实 API 注册一个用户
+let testUser: { email: string; password: string; token: string };
+
+test.beforeAll(async () => {
+  testUser = await registerUserViaApi('login');
+});
 
 test.describe('/login 登录页', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/login');
   });
 
+  // ── 页面加载 ──
   test('页面加载成功 200', async ({ page }) => {
-    const res = await page.goto('/login');
-    expect(res?.status()).toBe(200);
+    const response = await page.goto('/login');
+    expect(response?.status()).toBe(200);
   });
 
   // ── 页面结构 ──
@@ -69,25 +78,24 @@ test.describe('/login 登录页', () => {
 
   // ── 登录业务 ──
   test('正确凭据登录: 跳转到 /dashboard', async ({ page }) => {
-    await page.locator('input[type="email"]').fill('demo@alphinel.com');
-    await page.locator('input[type="password"]').fill('demo123');
+    await page.locator('input[type="email"]').fill(testUser.email);
+    await page.locator('input[type="password"]').fill(testUser.password);
     await page.locator('button[type="submit"]').click();
-    await page.waitForURL('**/dashboard', { timeout: 10000 });
+    await page.waitForURL('**/dashboard', { timeout: 15000 });
     expect(page.url()).toContain('/dashboard');
   });
 
   test('正确凭据登录: localStorage 存储了 token', async ({ page }) => {
-    await page.locator('input[type="email"]').fill('demo@alphinel.com');
-    await page.locator('input[type="password"]').fill('demo123');
+    await page.locator('input[type="email"]').fill(testUser.email);
+    await page.locator('input[type="password"]').fill(testUser.password);
     await page.locator('button[type="submit"]').click();
-    await page.waitForURL('**/dashboard', { timeout: 10000 });
+    await page.waitForURL('**/dashboard', { timeout: 15000 });
     const token = await page.evaluate(() => localStorage.getItem('sentinel_token'));
     expect(token).toBeTruthy();
-    expect(token).toContain('dev_mock_jwt_');
   });
 
   test('错误密码登录: 显示错误信息', async ({ page }) => {
-    await page.locator('input[type="email"]').fill('demo@alphinel.com');
+    await page.locator('input[type="email"]').fill(testUser.email);
     await page.locator('input[type="password"]').fill('wrongpassword');
     await page.locator('button[type="submit"]').click();
     await expect(page.locator('text=邮箱或密码错误')).toBeVisible({ timeout: 5000 });
@@ -96,8 +104,8 @@ test.describe('/login 登录页', () => {
   });
 
   test('错误邮箱登录: 显示错误信息', async ({ page }) => {
-    await page.locator('input[type="email"]').fill('wrong@example.com');
-    await page.locator('input[type="password"]').fill('demo123');
+    await page.locator('input[type="email"]').fill('nonexistent@example.com');
+    await page.locator('input[type="password"]').fill('wrongpassword');
     await page.locator('button[type="submit"]').click();
     await expect(page.locator('text=邮箱或密码错误')).toBeVisible({ timeout: 5000 });
   });

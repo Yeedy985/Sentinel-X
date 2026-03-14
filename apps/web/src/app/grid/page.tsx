@@ -72,7 +72,7 @@ export default function GridPage() {
   const handleSort = (s: 'pnl' | 'copies' | 'newest') => { setSort(s); setPage(1); };
 
   const downloads = [
-    { name: 'Windows', sub: 'Windows 10/11 64-bit', icon: Monitor, file: '/downloads/AAGS-Setup.exe', ext: '.exe', size: '85 MB', color: 'cyan', gradient: 'from-cyan-500 to-blue-600', glow: 'hover:shadow-cyan-500/20' },
+    { name: 'Windows', sub: 'Windows 10/11 64-bit', icon: Monitor, file: 'https://github.com/Yeedy985/AAGS/releases/download/v1.0.0/AAGS.Setup.1.0.0.exe', ext: '.exe', size: '107 MB', color: 'cyan', gradient: 'from-cyan-500 to-blue-600', glow: 'hover:shadow-cyan-500/20' },
     { name: 'macOS', sub: 'macOS 12+ (Intel / Apple Silicon)', icon: Monitor, file: '/downloads/AAGS.dmg', ext: '.dmg', size: '90 MB', color: 'violet', gradient: 'from-violet-500 to-purple-600', glow: 'hover:shadow-violet-500/20' },
     { name: 'Android', sub: 'Android 8.0+', icon: Smartphone, file: '/downloads/AAGS.apk', ext: '.apk', size: '45 MB', color: 'emerald', gradient: 'from-emerald-500 to-teal-600', glow: 'hover:shadow-emerald-500/20' },
   ];

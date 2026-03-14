@@ -1,4 +1,12 @@
 import { test, expect } from '@playwright/test';
+import { registerUserViaApi, uniqueEmail, TEST_PASSWORD } from './helpers';
+
+// 通过真实 API 注册测试用户
+let testUser: { email: string; password: string; token: string };
+
+test.beforeAll(async () => {
+  testUser = await registerUserViaApi('nav');
+});
 
 // ══════════════════════════════════════════════
 //  跨页面导航
@@ -41,27 +49,28 @@ test.describe('跨页面导航', () => {
     await page.locator('a[href="/register"]').first().click();
     await expect(page).toHaveURL('/register');
 
-    // 2. 注册
-    await page.locator('input[type="email"]').fill('flow@test.com');
-    await page.locator('input[type="password"]').fill('testpass123');
+    // 2. 注册（通过 UI，每次用唯一邮箱）
+    const newEmail = uniqueEmail('flow');
+    await page.locator('input[type="email"]').fill(newEmail);
+    await page.locator('input[type="password"]').fill(TEST_PASSWORD);
     await page.locator('button[type="submit"]').click();
-    await page.waitForURL('**/dashboard', { timeout: 10000 });
+    await page.waitForURL('**/dashboard', { timeout: 15000 });
 
     // 3. 在 Dashboard
-    await expect(page.locator('text=Token 余额').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('text=Token 余额').first()).toBeVisible({ timeout: 15000 });
 
     // 4. 退出
     await page.locator('button[title="退出登录"]').click();
     await page.waitForURL('**/login', { timeout: 10000 });
 
-    // 5. 登录
-    await page.locator('input[type="email"]').fill('demo@alphinel.com');
-    await page.locator('input[type="password"]').fill('demo123');
+    // 5. 用预注册的用户登录
+    await page.locator('input[type="email"]').fill(testUser.email);
+    await page.locator('input[type="password"]').fill(testUser.password);
     await page.locator('button[type="submit"]').click();
-    await page.waitForURL('**/dashboard', { timeout: 10000 });
+    await page.waitForURL('**/dashboard', { timeout: 15000 });
 
     // 6. 回到 Dashboard
-    await expect(page.locator('text=Token 余额').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('text=Token 余额').first()).toBeVisible({ timeout: 15000 });
   });
 });
 
@@ -122,11 +131,11 @@ test.describe('响应式布局', () => {
   test('移动端 (375px): Dashboard 登录后正常渲染', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/login');
-    await page.locator('input[type="email"]').fill('demo@alphinel.com');
-    await page.locator('input[type="password"]').fill('demo123');
+    await page.locator('input[type="email"]').fill(testUser.email);
+    await page.locator('input[type="password"]').fill(testUser.password);
     await page.locator('button[type="submit"]').click();
-    await page.waitForURL('**/dashboard', { timeout: 10000 });
-    await expect(page.locator('text=Token 余额').first()).toBeVisible({ timeout: 10000 });
+    await page.waitForURL('**/dashboard', { timeout: 15000 });
+    await expect(page.locator('text=Token 余额').first()).toBeVisible({ timeout: 15000 });
   });
 });
 
