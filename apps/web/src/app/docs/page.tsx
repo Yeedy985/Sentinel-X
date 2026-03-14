@@ -15,7 +15,7 @@ interface ApiEndpoint {
   path: string;
   title: string;
   desc: string;
-  auth: 'API Token' | 'JWT' | '无';
+  auth: 'API Token' | 'JWT' | '无' | 'None';
   headers: Record<string, string>;
   request?: { body?: Record<string, string>; query?: Record<string, string> };
   response: string;
@@ -24,17 +24,19 @@ interface ApiEndpoint {
   statusCodes?: { code: number; desc: string }[];
 }
 
-const API_ENDPOINTS: ApiEndpoint[] = [
+function getApiEndpoints(locale: string): ApiEndpoint[] {
+  const zh = locale === 'zh';
+  return [
   {
     method: 'POST',
     path: '/api/scan/request',
-    title: '请求扫描',
-    desc: '请求执行一次 300 信号矩阵扫描。扫描完成后按实际 LLM 消耗扣除 Token，失败自动退回。结果可通过简报接口获取或 SSE 实时推送。',
+    title: zh ? '请求扫描' : 'Request Scan',
+    desc: zh ? '请求执行一次 300 信号矩阵扫描。扫描完成后按实际 LLM 消耗扣除 Token，失败自动退回。结果可通过简报接口获取或 SSE 实时推送。' : 'Request a 300-signal matrix scan. Tokens are charged based on actual LLM usage after completion; refunded on failure. Results available via briefings endpoint or SSE push.',
     auth: 'API Token',
     headers: { 'Authorization': 'Bearer stx_xxxxxxxx', 'Content-Type': 'application/json' },
     request: {
       body: {
-        'enableSearch': 'boolean — 是否启用 Perplexity 搜索增强 (默认 true，当前服务固定启用搜索增强，费用按实际 LLM 消耗扣除)',
+        'enableSearch': zh ? 'boolean — 是否启用 Perplexity 搜索增强 (默认 true，当前服务固定启用搜索增强，费用按实际 LLM 消耗扣除)' : 'boolean — Enable Perplexity search enhancement (default true, currently always enabled, charged by actual LLM usage)',
       },
     },
     response: `{
@@ -46,30 +48,35 @@ const API_ENDPOINTS: ApiEndpoint[] = [
     "cached": false
   }
 }`,
-    notes: [
+    notes: zh ? [
       'tokenCost 为实际 LLM 消耗的 Token 数，每次扫描可能不同',
       '缓存窗口内重复请求不会重复调用 LLM，但仍按同等费用扣除',
       '频率限制：默认每用户每小时最多 3 次',
       'briefingId 用于后续查询简报结果',
+    ] : [
+      'tokenCost is the actual LLM token consumption, may vary per scan',
+      'Repeated requests within cache window won\'t re-invoke LLM, but still charged equally',
+      'Rate limit: 3 requests per user per hour by default',
+      'briefingId is used to query briefing results later',
     ],
     statusCodes: [
-      { code: 200, desc: '成功 — 扫描已提交或命中缓存' },
-      { code: 402, desc: 'Token 余额不足' },
-      { code: 429, desc: '超出频率限制' },
-      { code: 503, desc: '服务维护中' },
+      { code: 200, desc: zh ? '成功 — 扫描已提交或命中缓存' : 'Success — Scan submitted or cache hit' },
+      { code: 402, desc: zh ? 'Token 余额不足' : 'Insufficient token balance' },
+      { code: 429, desc: zh ? '超出频率限制' : 'Rate limit exceeded' },
+      { code: 503, desc: zh ? '服务维护中' : 'Service under maintenance' },
     ],
   },
   {
     method: 'GET',
     path: '/api/scan/briefings',
-    title: '获取简报列表',
-    desc: '获取当前用户最近的扫描简报结果，包含市场摘要、触发信号、预警信息和管线详情。',
+    title: zh ? '获取简报列表' : 'Get Briefings',
+    desc: zh ? '获取当前用户最近的扫描简报结果，包含市场摘要、触发信号、预警信息和管线详情。' : 'Retrieve recent scan briefings including market summary, triggered signals, alerts, and pipeline info.',
     auth: 'API Token',
     headers: { 'Authorization': 'Bearer stx_xxxxxxxx' },
     request: {
       query: {
-        'limit': 'number — 返回数量，1~20，默认 10',
-        'after': 'string — 增量拉取，传入某个 briefingId，只返回该简报之后的新数据',
+        'limit': zh ? 'number — 返回数量，1~20，默认 10' : 'number — Results count, 1~20, default 10',
+        'after': zh ? 'string — 增量拉取，传入某个 briefingId，只返回该简报之后的新数据' : 'string — Incremental fetch, pass a briefingId to get only newer briefings',
       },
     },
     response: `{
@@ -78,25 +85,25 @@ const API_ENDPOINTS: ApiEndpoint[] = [
     {
       "briefingId": "brf_1710000000_a1b2c3d4",
       "timestamp": 1710000030000,
-      "marketSummary": "BTC 突破 95000 美元...",
+      "marketSummary": "BTC broke through $95,000...",
       "triggeredSignals": [
         {
           "signalId": 1,
           "impact": 8,
           "confidence": 0.85,
-          "title": "BTC突破关键阻力位",
-          "summary": "价格突破95000美元心理关口...",
-          "source": "Perplexity搜索"
+          "title": "BTC breaks key resistance",
+          "summary": "Price broke through $95,000 psychological level...",
+          "source": "Perplexity Search"
         }
       ],
       "alerts": [
         {
-          "title": "重大突破预警",
-          "description": "BTC价格突破关键技术位...",
+          "title": "Major breakout alert",
+          "description": "BTC price broke key technical level...",
           "level": "critical",
           "group": "G1_BTC_CORE",
           "relatedCoins": ["BTC"],
-          "source": "DeepSeek分析"
+          "source": "DeepSeek Analysis"
         }
       ],
       "pipelineInfo": {
@@ -108,22 +115,26 @@ const API_ENDPOINTS: ApiEndpoint[] = [
     }
   ]
 }`,
-    notes: [
+    notes: zh ? [
       'triggeredSignals 中的 signalId 对应 300 信号矩阵中的信号编号 (1~300)',
       'alerts.level 取值: "critical"(紧急) / "warning"(一般) / "info"(信息)',
       '信号 impact 取值范围 -10 ~ +10，正值看涨，负值看跌',
+    ] : [
+      'signalId in triggeredSignals maps to signal #1~300 in the signal matrix',
+      'alerts.level: "critical" / "warning" / "info"',
+      'Signal impact range: -10 ~ +10, positive = bullish, negative = bearish',
     ],
   },
   {
     method: 'GET',
     path: '/api/scan/stream',
-    title: 'SSE 实时推送',
-    desc: '建立 Server-Sent Events 长连接，实时接收扫描完成后的简报推送。适用于实时监控场景。',
+    title: zh ? 'SSE 实时推送' : 'SSE Real-time Push',
+    desc: zh ? '建立 Server-Sent Events 长连接，实时接收扫描完成后的简报推送。适用于实时监控场景。' : 'Establish a Server-Sent Events connection to receive briefing push notifications in real-time.',
     auth: 'API Token',
     headers: {},
     request: {
       query: {
-        'token': 'string — API Token (URL参数传递，因 EventSource 不支持自定义 Header)',
+        'token': zh ? 'string — API Token (URL参数传递，因 EventSource 不支持自定义 Header)' : 'string — API Token (passed as URL param since EventSource doesn\'t support custom headers)',
       },
     },
     response: `event: connected
@@ -134,7 +145,7 @@ data: {"t":1710000015000}
 
 event: briefing
 data: {"briefingId":"brf_...","timestamp":...,"marketSummary":"...","triggeredSignals":[...],"alerts":[...],"pipelineInfo":{...}}`,
-    example: `const es = new EventSource(
+    example: zh ? `const es = new EventSource(
   '${API_BASE}/api/scan/stream?token=stx_xxxxxxxx'
 );
 
@@ -147,18 +158,35 @@ es.addEventListener('briefing', (event) => {
 
 es.addEventListener('heartbeat', () => {
   // 服务器每 15 秒发送一次心跳
+});` : `const es = new EventSource(
+  '${API_BASE}/api/scan/stream?token=stx_xxxxxxxx'
+);
+
+es.addEventListener('briefing', (event) => {
+  const briefing = JSON.parse(event.data);
+  console.log('New briefing:', briefing.marketSummary);
+  console.log('Triggered signals:', briefing.triggeredSignals.length);
+  console.log('Alerts:', briefing.alerts.length);
+});
+
+es.addEventListener('heartbeat', () => {
+  // Server sends heartbeat every 15 seconds
 });`,
-    notes: [
+    notes: zh ? [
       'EventSource 会自动重连，无需手动处理断线',
       '心跳间隔 15 秒，用于保持连接活跃',
       '简报推送事件名为 "briefing"，数据格式与 /briefings 接口一致',
+    ] : [
+      'EventSource auto-reconnects, no manual handling needed',
+      'Heartbeat interval: 15 seconds, keeps connection alive',
+      'Briefing push event name is "briefing", same format as /briefings endpoint',
     ],
   },
   {
     method: 'GET',
     path: '/api/scan/status',
-    title: '服务状态',
-    desc: '检查公共服务运行状态和当前用户的 Token 余额。可用于健康检查和余额监控。',
+    title: zh ? '服务状态' : 'Service Status',
+    desc: zh ? '检查公共服务运行状态和当前用户的 Token 余额。可用于健康检查和余额监控。' : 'Check service status and current user token balance. Useful for health checks and balance monitoring.',
     auth: 'API Token',
     headers: { 'Authorization': 'Bearer stx_xxxxxxxx' },
     response: `{
@@ -170,23 +198,26 @@ es.addEventListener('heartbeat', () => {
     "message": null
   }
 }`,
-    notes: [
+    notes: zh ? [
       'ok=false 时表示服务维护中，此时 message 包含维护说明',
       'tokenBalance 为当前用户 Token 余额',
+    ] : [
+      'ok=false means service is under maintenance, message contains details',
+      'tokenBalance is the current user\'s token balance',
     ],
   },
   {
     method: 'POST',
     path: '/api/auth/register',
-    title: '用户注册',
-    desc: '注册新账号，注册成功即赠送 Token（数量以管理后台配置为准）。',
-    auth: '无',
+    title: zh ? '用户注册' : 'Register',
+    desc: zh ? '注册新账号，注册成功即赠送 Token（数量以管理后台配置为准）。' : 'Register a new account. Bonus tokens are granted upon registration (amount configured by admin).',
+    auth: zh ? '无' : 'None',
     headers: { 'Content-Type': 'application/json' },
     request: {
       body: {
-        'email': 'string — 邮箱地址 (唯一)',
-        'password': 'string — 密码 (至少 6 位)',
-        'nickname': 'string? — 昵称 (可选)',
+        'email': zh ? 'string — 邮箱地址 (唯一)' : 'string — Email address (unique)',
+        'password': zh ? 'string — 密码 (至少 6 位)' : 'string — Password (min 6 characters)',
+        'nickname': zh ? 'string? — 昵称 (可选)' : 'string? — Nickname (optional)',
       },
     },
     response: `{
@@ -207,14 +238,14 @@ es.addEventListener('heartbeat', () => {
   {
     method: 'POST',
     path: '/api/auth/login',
-    title: '用户登录',
-    desc: '使用邮箱和密码登录，返回 JWT Token。',
-    auth: '无',
+    title: zh ? '用户登录' : 'Login',
+    desc: zh ? '使用邮箱和密码登录，返回 JWT Token。' : 'Login with email and password, returns a JWT token.',
+    auth: zh ? '无' : 'None',
     headers: { 'Content-Type': 'application/json' },
     request: {
       body: {
-        'email': 'string — 邮箱地址',
-        'password': 'string — 密码',
+        'email': zh ? 'string — 邮箱地址' : 'string — Email address',
+        'password': zh ? 'string — 密码' : 'string — Password',
       },
     },
     response: `{
@@ -228,13 +259,13 @@ es.addEventListener('heartbeat', () => {
   {
     method: 'POST',
     path: '/api/user/tokens',
-    title: '创建 API Token',
-    desc: '创建一个用于调用扫描接口的 API Token。Token 仅在创建时完整显示一次，请妥善保存。',
+    title: zh ? '创建 API Token' : 'Create API Token',
+    desc: zh ? '创建一个用于调用扫描接口的 API Token。Token 仅在创建时完整显示一次，请妥善保存。' : 'Create an API token for calling scan endpoints. The full token is only shown once upon creation — save it securely.',
     auth: 'JWT',
     headers: { 'Authorization': 'Bearer eyJhbGci...', 'Content-Type': 'application/json' },
     request: {
       body: {
-        'name': 'string? — Token 名称备注 (可选)',
+        'name': zh ? 'string? — Token 名称备注 (可选)' : 'string? — Token name/note (optional)',
       },
     },
     response: `{
@@ -243,20 +274,24 @@ es.addEventListener('heartbeat', () => {
     "id": 1,
     "token": "stx_a1b2c3d4e5f6...",
     "tokenPrefix": "stx_a1b2",
-    "name": "我的交易机器人"
+    "name": "My Trading Bot"
   }
 }`,
-    notes: [
+    notes: zh ? [
       'API Token 以 stx_ 前缀开头',
       '完整 Token 仅此一次返回，后续只能查看前缀',
       '调用扫描相关接口时使用此 Token 认证',
+    ] : [
+      'API Token starts with stx_ prefix',
+      'Full token is only returned once, only prefix shown afterwards',
+      'Use this token for scan endpoint authentication',
     ],
   },
   {
     method: 'GET',
     path: '/api/user/tokens',
-    title: 'API Token 列表',
-    desc: '列出当前用户所有 API Token（仅显示前缀）。',
+    title: zh ? 'API Token 列表' : 'List API Tokens',
+    desc: zh ? '列出当前用户所有 API Token（仅显示前缀）。' : 'List all API tokens for the current user (prefix only).',
     auth: 'JWT',
     headers: { 'Authorization': 'Bearer eyJhbGci...' },
     response: `{
@@ -265,7 +300,7 @@ es.addEventListener('heartbeat', () => {
     {
       "id": 1,
       "tokenPrefix": "stx_a1b2",
-      "name": "我的交易机器人",
+      "name": "My Trading Bot",
       "lastUsedAt": "2026-03-12T00:00:00.000Z",
       "isRevoked": false,
       "createdAt": "2026-03-10T00:00:00.000Z"
@@ -276,13 +311,14 @@ es.addEventListener('heartbeat', () => {
   {
     method: 'DELETE',
     path: '/api/user/tokens/:id',
-    title: '吊销 API Token',
-    desc: '永久吊销指定的 API Token，吊销后该 Token 无法再用于认证。',
+    title: zh ? '吊销 API Token' : 'Revoke API Token',
+    desc: zh ? '永久吊销指定的 API Token，吊销后该 Token 无法再用于认证。' : 'Permanently revoke the specified API token. It can no longer be used for authentication.',
     auth: 'JWT',
     headers: { 'Authorization': 'Bearer eyJhbGci...' },
-    response: `{ "success": true, "message": "Token 已吊销" }`,
+    response: `{ "success": true, "message": "Token revoked" }`,
   },
 ];
+}
 
 function CodeBlock({ code, lang = 'json' }: { code: string; lang?: string }) {
   const [copied, setCopied] = useState(false);
@@ -308,6 +344,8 @@ function CodeBlock({ code, lang = 'json' }: { code: string; lang?: string }) {
 }
 
 function EndpointCard({ ep, defaultOpen = false }: { ep: ApiEndpoint; defaultOpen?: boolean }) {
+  const { locale } = useI18n();
+  const zh = locale === 'zh';
   const methodColor: Record<string, string> = {
     GET: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
     POST: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
@@ -357,8 +395,8 @@ function EndpointCard({ ep, defaultOpen = false }: { ep: ApiEndpoint; defaultOpe
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-800">
-                  <th className="text-left py-1.5 text-slate-500 font-medium">字段</th>
-                  <th className="text-left py-1.5 text-slate-500 font-medium">说明</th>
+                  <th className="text-left py-1.5 text-slate-500 font-medium">{zh ? '字段' : 'Field'}</th>
+                  <th className="text-left py-1.5 text-slate-500 font-medium">{zh ? '说明' : 'Description'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -378,8 +416,8 @@ function EndpointCard({ ep, defaultOpen = false }: { ep: ApiEndpoint; defaultOpe
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-800">
-                  <th className="text-left py-1.5 text-slate-500 font-medium">参数</th>
-                  <th className="text-left py-1.5 text-slate-500 font-medium">说明</th>
+                  <th className="text-left py-1.5 text-slate-500 font-medium">{zh ? '参数' : 'Parameter'}</th>
+                  <th className="text-left py-1.5 text-slate-500 font-medium">{zh ? '说明' : 'Description'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -403,7 +441,7 @@ function EndpointCard({ ep, defaultOpen = false }: { ep: ApiEndpoint; defaultOpe
         {/* Code Example */}
         {ep.example && (
           <div>
-            <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">代码示例</h5>
+            <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{zh ? '代码示例' : 'Code Example'}</h5>
             <CodeBlock code={ep.example} lang="javascript" />
           </div>
         )}
@@ -411,7 +449,7 @@ function EndpointCard({ ep, defaultOpen = false }: { ep: ApiEndpoint; defaultOpe
         {/* Notes */}
         {ep.notes && ep.notes.length > 0 && (
           <div className="p-4 rounded-xl bg-white/[0.015] border border-white/[0.05]">
-            <h5 className="text-[11px] font-semibold text-slate-500 mb-2.5 uppercase tracking-wider">备注</h5>
+            <h5 className="text-[11px] font-semibold text-slate-500 mb-2.5 uppercase tracking-wider">{zh ? '备注' : 'Notes'}</h5>
             <ul className="space-y-1.5">
               {ep.notes.map((n, i) => (
                 <li key={i} className="text-[12px] text-slate-400 flex items-start gap-2 leading-relaxed">
@@ -425,7 +463,7 @@ function EndpointCard({ ep, defaultOpen = false }: { ep: ApiEndpoint; defaultOpe
         {/* Status Codes */}
         {ep.statusCodes && (
           <div>
-            <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">HTTP 状态码</h5>
+            <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{zh ? 'HTTP 状态码' : 'HTTP Status Codes'}</h5>
             <div className="grid grid-cols-2 gap-2">
               {ep.statusCodes.map((sc) => (
                 <div key={sc.code} className="flex items-center gap-2 text-xs">
@@ -447,9 +485,11 @@ function EndpointCard({ ep, defaultOpen = false }: { ep: ApiEndpoint; defaultOpe
 
 export default function DocsPage() {
   const { locale } = useI18n();
-  const scanEndpoints = API_ENDPOINTS.filter(ep => ep.path.startsWith('/api/scan'));
-  const authEndpoints = API_ENDPOINTS.filter(ep => ep.path.startsWith('/api/auth'));
-  const userEndpoints = API_ENDPOINTS.filter(ep => ep.path.startsWith('/api/user'));
+  const endpoints = getApiEndpoints(locale);
+  const scanEndpoints = endpoints.filter(ep => ep.path.startsWith('/api/scan'));
+  const authEndpoints = endpoints.filter(ep => ep.path.startsWith('/api/auth'));
+  const userEndpoints = endpoints.filter(ep => ep.path.startsWith('/api/user'));
+  const zh = locale === 'zh';
 
   return (
     <div className="min-h-screen bg-[#020617] text-white overflow-x-hidden">
@@ -509,7 +549,7 @@ export default function DocsPage() {
               </div>
               <h3 className="text-xl font-bold tracking-tight">{locale === 'zh' ? '快速开始' : 'Quick Start'}</h3>
             </div>
-            <CodeBlock lang="bash" code={`# 1. 注册账号
+            <CodeBlock lang="bash" code={zh ? `# 1. 注册账号
 curl -X POST ${API_BASE}/api/auth/register \\
   -H "Content-Type: application/json" \\
   -d '{"email":"you@example.com","password":"your_password"}'
@@ -533,6 +573,31 @@ curl -X POST ${API_BASE}/api/scan/request \\
   -d '{"enableSearch":true}'
 
 # 5. 获取扫描结果
+curl ${API_BASE}/api/scan/briefings?limit=1 \\
+  -H "Authorization: Bearer stx_xxxxxxxx"` : `# 1. Register an account
+curl -X POST ${API_BASE}/api/auth/register \\
+  -H "Content-Type: application/json" \\
+  -d '{"email":"you@example.com","password":"your_password"}'
+
+# 2. Login to get JWT
+curl -X POST ${API_BASE}/api/auth/login \\
+  -H "Content-Type: application/json" \\
+  -d '{"email":"you@example.com","password":"your_password"}'
+
+# 3. Create API Token with JWT
+curl -X POST ${API_BASE}/api/user/tokens \\
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"My Bot"}'
+# Returns: { "data": { "token": "stx_xxxxxxxx" } }  ← Save this token
+
+# 4. Call scan endpoint
+curl -X POST ${API_BASE}/api/scan/request \\
+  -H "Authorization: Bearer stx_xxxxxxxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{"enableSearch":true}'
+
+# 5. Get scan results
 curl ${API_BASE}/api/scan/briefings?limit=1 \\
   -H "Authorization: Bearer stx_xxxxxxxx"`} />
           </div>
@@ -596,12 +661,15 @@ curl ${API_BASE}/api/scan/briefings?limit=1 \\
             <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-500/20 to-transparent" />
             <h3 className="text-lg font-bold mb-3 tracking-tight">{locale === 'zh' ? '通用错误格式' : 'Error Format'}</h3>
             <p className="text-sm text-slate-400 mb-4">{locale === 'zh' ? '所有接口失败时返回统一的 JSON 错误格式：' : 'All endpoints return a unified JSON error format on failure:'}</p>
-            <CodeBlock code={`{
+            <CodeBlock code={zh ? `{
   "success": false,
   "error": "错误描述信息"
+}` : `{
+  "success": false,
+  "error": "Error description message"
 }`} />
             <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
+              {(zh ? [
                 { code: 400, desc: '请求参数错误' },
                 { code: 401, desc: '认证失败/Token 无效' },
                 { code: 402, desc: 'Token 余额不足' },
@@ -610,7 +678,16 @@ curl ${API_BASE}/api/scan/briefings?limit=1 \\
                 { code: 429, desc: '频率限制' },
                 { code: 500, desc: '服务器内部错误' },
                 { code: 503, desc: '服务维护中' },
-              ].map((sc) => (
+              ] : [
+                { code: 400, desc: 'Bad request parameters' },
+                { code: 401, desc: 'Auth failed / Invalid token' },
+                { code: 402, desc: 'Insufficient token balance' },
+                { code: 404, desc: 'Resource not found' },
+                { code: 409, desc: 'Email already registered' },
+                { code: 429, desc: 'Rate limit exceeded' },
+                { code: 500, desc: 'Internal server error' },
+                { code: 503, desc: 'Service under maintenance' },
+              ]).map((sc) => (
                 <div key={sc.code} className="flex items-center gap-2 text-xs">
                   <span className={`px-1.5 py-0.5 rounded font-mono font-bold ${
                     sc.code < 300 ? 'bg-emerald-600/15 text-emerald-400'
@@ -636,10 +713,12 @@ curl ${API_BASE}/api/scan/briefings?limit=1 \\
                 <h3 className="text-lg font-bold tracking-tight">{locale === 'zh' ? '300 信号矩阵参考' : '300 Signal Matrix Reference'}</h3>
               </div>
               <p className="text-sm text-slate-400 mb-5">
-                每次扫描结果中的 <code className="text-cyan-400 bg-cyan-500/[0.08] px-1.5 py-0.5 rounded">triggeredSignals</code> 包含被触发的信号，对应以下 10 大信号组：
+                {zh
+                  ? <>每次扫描结果中的 <code className="text-cyan-400 bg-cyan-500/[0.08] px-1.5 py-0.5 rounded">triggeredSignals</code> 包含被触发的信号，对应以下 10 大信号组：</>
+                  : <>Each scan result's <code className="text-cyan-400 bg-cyan-500/[0.08] px-1.5 py-0.5 rounded">triggeredSignals</code> contains triggered signals mapped to the following 10 signal groups:</>}
               </p>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 text-xs">
-                {[
+                {(zh ? [
                   { id: 'G1', name: 'BTC 核心', range: '1~30' },
                   { id: 'G2', name: 'ETH 生态', range: '31~60' },
                   { id: 'G3', name: '山寨/Meme', range: '61~90' },
@@ -650,7 +729,18 @@ curl ${API_BASE}/api/scan/briefings?limit=1 \\
                   { id: 'G8', name: '链上数据', range: '211~240' },
                   { id: 'G9', name: '市场情绪', range: '241~270' },
                   { id: 'G10', name: '黑天鹅', range: '271~300' },
-                ].map((g) => (
+                ] : [
+                  { id: 'G1', name: 'BTC Core', range: '1~30' },
+                  { id: 'G2', name: 'ETH Ecosystem', range: '31~60' },
+                  { id: 'G3', name: 'Altcoin/Meme', range: '61~90' },
+                  { id: 'G4', name: 'DeFi/CEX', range: '91~120' },
+                  { id: 'G5', name: 'Macro Economy', range: '121~150' },
+                  { id: 'G6', name: 'Regulation', range: '151~180' },
+                  { id: 'G7', name: 'Technical', range: '181~210' },
+                  { id: 'G8', name: 'On-chain Data', range: '211~240' },
+                  { id: 'G9', name: 'Sentiment', range: '241~270' },
+                  { id: 'G10', name: 'Black Swan', range: '271~300' },
+                ]).map((g) => (
                   <div key={g.id} className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-colors">
                     <span className="text-cyan-400 font-bold">{g.id}</span>
                     <span className="text-slate-300 ml-1.5 font-medium">{g.name}</span>
@@ -659,8 +749,9 @@ curl ${API_BASE}/api/scan/briefings?limit=1 \\
                 ))}
               </div>
               <p className="text-xs text-slate-500 mt-4 leading-relaxed">
-                每条信号包含影响力(impact)、置信度(confidence)、类别(D=方向/V=波动/R=风险) 三大维度，
-                综合计算后输出 SD(方向) / SV(波动) / SR(风险) 三大核心可执行指数。
+                {zh
+                  ? '每条信号包含影响力(impact)、置信度(confidence)、类别(D=方向/V=波动/R=风险) 三大维度，综合计算后输出 SD(方向) / SV(波动) / SR(风险) 三大核心可执行指数。'
+                  : 'Each signal contains impact, confidence, and category (D=Direction/V=Volatility/R=Risk). Combined, they produce three core actionable indices: SD (Direction) / SV (Volatility) / SR (Risk).'}
               </p>
             </div>
           </div>

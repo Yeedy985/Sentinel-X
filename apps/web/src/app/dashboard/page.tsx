@@ -237,6 +237,20 @@ export default function DashboardPage() {
 
   const handleLogout = () => { clearToken(); router.push('/login'); };
 
+  const txDesc = (desc: string) => {
+    if (locale !== 'zh') {
+      const map: Record<string, string> = {
+        '注册赠送': 'Registration Bonus',
+        '扫描消耗': 'Scan Cost',
+        '扫描退回': 'Scan Refund',
+        '充值兑换': 'Recharge Exchange',
+        '管理员调整': 'Admin Adjustment',
+      };
+      return map[desc] || desc;
+    }
+    return desc;
+  };
+
   const statusBadge = (status: string) => {
     switch (status) {
       case 'PENDING': return <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/15"><Clock className="w-3 h-3" />{locale === 'zh' ? '待支付' : 'Pending'}</span>;
@@ -750,7 +764,7 @@ export default function DashboardPage() {
             {transactions.map((t: any) => (
               <div key={t.id} className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all flex items-center justify-between">
                 <div>
-                  <div className="text-[13px] font-medium text-slate-200">{t.description || t.type}</div>
+                  <div className="text-[13px] font-medium text-slate-200">{txDesc(t.description || t.type)}</div>
                   <div className="text-[11px] text-slate-600 mt-1">{new Date(t.createdAt).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US')}</div>
                 </div>
                 <div className="text-right">

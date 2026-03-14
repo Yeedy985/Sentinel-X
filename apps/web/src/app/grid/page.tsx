@@ -41,13 +41,18 @@ function PnlChart({ points, positive }: { points: number[]; positive: boolean })
   );
 }
 
-function fmtRuntime(s: number) {
+function fmtRuntime(s: number, locale: string = 'zh') {
   const days = Math.floor(s / 86400);
   const hours = Math.floor((s % 86400) / 3600);
   const mins = Math.floor((s % 3600) / 60);
-  if (days > 0) return `${days}天 ${hours}时 ${mins}分`;
-  if (hours > 0) return `${hours}时 ${mins}分`;
-  return `${mins}分`;
+  if (locale === 'zh') {
+    if (days > 0) return `${days}天 ${hours}时 ${mins}分`;
+    if (hours > 0) return `${hours}时 ${mins}分`;
+    return `${mins}分`;
+  }
+  if (days > 0) return `${days}d ${hours}h ${mins}m`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
 }
 
 // ==================== 网格量化页面 ====================
@@ -210,7 +215,7 @@ export default function GridPage() {
                         </div>
                         <div>
                           <p className="text-[11px] text-slate-500 mb-0.5">{t('grid.runtime')}</p>
-                          <p className="text-[13px] font-semibold text-slate-200">{fmtRuntime(item.runSeconds)}</p>
+                          <p className="text-[13px] font-semibold text-slate-200">{fmtRuntime(item.runSeconds, locale)}</p>
                         </div>
                         <div>
                           <p className="text-[11px] text-slate-500 mb-0.5">{t('grid.minInvest')}</p>
