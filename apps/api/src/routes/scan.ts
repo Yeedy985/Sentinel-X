@@ -336,6 +336,7 @@ scanRoutes.get('/briefings', async (c) => {
         enableSearch: r.enableSearch,
         tokenCost: r.tokenCost,
         marketSummary: d.marketSummary || '',
+        marketSummaryEn: d.marketSummaryEn || '',
         triggeredSignals: d.triggeredSignals || [],
         alerts: d.alerts || [],
         pipelineInfo: d.pipelineInfo || {
@@ -396,6 +397,7 @@ scanRoutes.get('/stream', (c) => {
                 briefingId: record.briefingId,
                 timestamp: record.completedAt?.getTime() ?? Date.now(),
                 marketSummary: d.marketSummary || '',
+                marketSummaryEn: d.marketSummaryEn || '',
                 triggeredSignals: d.triggeredSignals || [],
                 alerts: d.alerts || [],
                 pipelineInfo: d.pipelineInfo || {

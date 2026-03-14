@@ -92,7 +92,7 @@ async function callLLM(config: {
   if (config.provider === 'anthropic') {
     const body: any = {
       model: config.model,
-      max_tokens: 4096,
+      max_tokens: 8192,
       temperature: 0.3,
       messages: [{ role: 'user', content: combinedPrompt }],
       ...(config.extraParams || {}),
@@ -128,7 +128,7 @@ async function callLLM(config: {
       { role: 'user', content: userPrompt },
     ],
     temperature: 0.3,
-    max_tokens: 4096,
+    max_tokens: 8192,
     ...(config.extraParams || {}),
   };
 
@@ -312,9 +312,17 @@ ${signalListText}
 ## Important
 - It is normal if no signals are triggered — return empty arrays
 - impact sign represents direction impact on crypto market (positive=bullish, negative=bearish)
-- You MUST provide BOTH Chinese and English versions for title/titleEn, summary/summaryEn, marketSummary/marketSummaryEn
-- Chinese fields (title, summary, marketSummary) must be in Chinese
-- English fields (titleEn, summaryEn, marketSummaryEn) must be in English`;
+
+## ⚠️ CRITICAL: BILINGUAL OUTPUT REQUIRED
+Every triggered signal MUST have BOTH:
+- "title" (Chinese) AND "titleEn" (English)
+- "summary" (Chinese) AND "summaryEn" (English)
+Every alert MUST have BOTH:
+- "title" (Chinese) AND "titleEn" (English)
+- "description" (Chinese) AND "descriptionEn" (English)
+The root object MUST have BOTH:
+- "marketSummary" (Chinese) AND "marketSummaryEn" (English)
+If you omit ANY *En field, the output is INVALID and will be rejected. Double-check before returning.`;
 
     const analysisResult = await callLLM(
       analyzerPipeline,
@@ -330,6 +338,24 @@ ${signalListText}
 
     // Step 3: 解析结果
     const briefingData = parseLLMOutput(analysisResult.text);
+
+    // 确保双语 En 字段存在 (LLM 可能遗漏)
+    if (!briefingData.marketSummaryEn) briefingData.marketSummaryEn = '';
+    if (briefingData.triggeredSignals) {
+      for (const s of briefingData.triggeredSignals) {
+        if (!s.titleEn) s.titleEn = '';
+        if (!s.summaryEn) s.summaryEn = '';
+      }
+    }
+    if (briefingData.alerts) {
+      for (const a of briefingData.alerts) {
+        if (!a.titleEn) a.titleEn = '';
+        if (!a.descriptionEn) a.descriptionEn = '';
+      }
+    }
+    const hasEn = !!briefingData.marketSummaryEn || briefingData.triggeredSignals?.some((s: any) => s.titleEn);
+    console.log(`[Worker] Bilingual check: marketSummaryEn=${!!briefingData.marketSummaryEn}, signalEn=${hasEn}`);
+
     briefingData.pipelineInfo = {
       hasSearcher: enableSearch && !!searchContext,
       hasMarketData: false,

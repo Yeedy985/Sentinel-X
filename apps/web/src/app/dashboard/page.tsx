@@ -764,7 +764,7 @@ export default function DashboardPage() {
             {transactions.map((t: any) => (
               <div key={t.id} className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all flex items-center justify-between">
                 <div>
-                  <div className="text-[13px] font-medium text-slate-200">{txDesc(t.description || t.type)}</div>
+                  <div className="text-[13px] font-medium text-slate-200">{t.description || t.type}</div>
                   <div className="text-[11px] text-slate-600 mt-1">{new Date(t.createdAt).toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US')}</div>
                 </div>
                 <div className="text-right">
