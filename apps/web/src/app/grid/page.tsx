@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import {
-  TrendingUp, Users, Clock, RefreshCw, BarChart3, Download, Monitor, Smartphone,
-  ChevronLeft, ChevronRight, Grid3X3, Share2, Copy, LineChart, Shield, Bell, Zap,
+  TrendingUp, RefreshCw, BarChart3, Download, Monitor, Smartphone,
+  ChevronLeft, ChevronRight, Grid3X3, Share2, Copy, LineChart, Bell, Zap,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -17,33 +17,36 @@ interface PlazaItem {
   chartPoints: number[]; isRunning: boolean; copyCount: number; lastSyncAt: string | null; createdAt: string;
 }
 
-function MiniChart({ points, positive }: { points: number[]; positive: boolean }) {
+function PnlChart({ points, positive }: { points: number[]; positive: boolean }) {
   if (!points || points.length < 2) return null;
-  const w = 90, h = 32;
+  const w = 120, h = 40;
   const min = Math.min(...points), max = Math.max(...points), range = max - min || 1;
   const step = w / (points.length - 1);
+  const color = positive ? '#0ecb81' : '#f6465d';
   const pts = points.map((p, i) => ({ x: i * step, y: h - ((p - min) / range) * (h - 6) - 3 }));
   const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  const fill = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
-    + ` L${w},${h} L0,${h} Z`;
-  const color = positive ? '#10b981' : '#ef4444';
+  const area = d + ` L${w},${h} L0,${h} Z`;
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0">
       <defs>
         <linearGradient id={`cg-${positive ? 'g' : 'r'}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.2" />
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <path d={fill} fill={`url(#cg-${positive ? 'g' : 'r'})`} />
+      <path d={area} fill={`url(#cg-${positive ? 'g' : 'r'})`} />
       <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
 function fmtRuntime(s: number) {
-  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600);
-  return d > 0 ? `${d}天` : h > 0 ? `${h}时` : `${Math.floor(s / 60)}分`;
+  const days = Math.floor(s / 86400);
+  const hours = Math.floor((s % 86400) / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  if (days > 0) return `${days}天 ${hours}时 ${mins}分`;
+  if (hours > 0) return `${hours}时 ${mins}分`;
+  return `${mins}分`;
 }
 
 // ==================== 网格量化页面 ====================
@@ -170,38 +173,58 @@ export default function GridPage() {
                 {items.map(item => {
                   const pos = item.pnlPercent >= 0;
                   return (
-                    <div key={item.shareCode} className="group relative p-5 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 overflow-hidden">
-                      <div className={`absolute inset-0 bg-gradient-to-br ${pos ? 'from-emerald-500/[0.03]' : 'from-red-500/[0.03]'} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
-                      <div className="relative">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[14px] font-bold tracking-tight">{item.baseAsset}<span className="text-slate-500 font-medium">/{item.quoteAsset}</span></span>
-                            <span className="text-[10px] text-slate-500 px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] font-medium">{item.totalGrids}格</span>
-                            <span className="relative flex h-2 w-2">
-                              {item.isRunning && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-50" />}
-                              <span className={`relative inline-flex rounded-full h-2 w-2 ${item.isRunning ? 'bg-emerald-400' : 'bg-slate-600'}`} />
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-slate-600 font-medium">{item.nickname}</span>
+                    <div key={item.shareCode} className="p-5 rounded-2xl border transition-all hover:border-slate-600" style={{ background: '#181A20', borderColor: 'rgba(43,47,54,0.8)' }}>
+                      {/* Row 1: Symbol + Grids + Online dot */}
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[15px] font-bold text-white tracking-tight">{item.baseAsset}/{item.quoteAsset}</span>
+                          <span className="text-[11px] text-slate-500 bg-[#2B2F36] px-1.5 py-0.5 rounded font-medium">{item.totalGrids}格</span>
+                          <span className="relative flex h-2 w-2">
+                            {item.isRunning && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40" />}
+                            <span className={`relative inline-flex rounded-full h-2 w-2 ${item.isRunning ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                          </span>
                         </div>
+                        <span className="text-[10px] text-slate-600 font-medium">{item.nickname}</span>
+                      </div>
 
-                        <div className="flex items-center justify-between mb-4">
-                          <div>
-                            <p className={`text-2xl font-extrabold tabular-nums tracking-tight ${pos ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {pos ? '+' : ''}{item.pnlPercent.toFixed(2)}%
-                            </p>
-                            <p className={`text-[11px] font-medium ${pos ? 'text-emerald-400/50' : 'text-red-400/50'}`}>
-                              {pos ? '+' : ''}{item.pnlUsdt.toFixed(2)} USDT
-                            </p>
-                          </div>
-                          <MiniChart points={item.chartPoints || []} positive={pos} />
+                      {/* Row 2: 盈亏标签 + 收益曲线 */}
+                      <div className="flex items-end justify-between mb-0.5">
+                        <div>
+                          <p className="text-[11px] text-slate-500 mb-1">盈亏 (USD)</p>
+                          <p className={`text-xl font-bold tabular-nums tracking-tight leading-none ${pos ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                            {pos ? '+' : ''}{item.pnlUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
                         </div>
+                        <PnlChart points={item.chartPoints || []} positive={pos} />
+                      </div>
 
-                        <div className="flex items-center justify-between text-[10px] text-slate-500 pt-3 border-t border-white/[0.05]">
-                          <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{fmtRuntime(item.runSeconds)}</span>
-                          <span className="flex items-center gap-1"><Shield className="w-3 h-3" />{item.maxDrawdownPct.toFixed(1)}%</span>
-                          <span>≥{item.minInvestUsdt.toFixed(0)}U</span>
-                          <span className="flex items-center gap-1"><Users className="w-3 h-3" />{item.copyCount}</span>
+                      {/* Row 3: 收益率 / 运行时间 / 最小投资额 */}
+                      <div className="grid grid-cols-3 gap-x-3 mt-3">
+                        <div>
+                          <p className="text-[11px] text-slate-500 mb-0.5">收益率</p>
+                          <p className={`text-[13px] font-bold ${pos ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                            {pos ? '+' : ''}{item.pnlPercent.toFixed(2)}%
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-slate-500 mb-0.5">运行时间</p>
+                          <p className="text-[13px] font-semibold text-slate-200">{fmtRuntime(item.runSeconds)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-slate-500 mb-0.5">最小投资额</p>
+                          <p className="text-[13px] font-semibold text-slate-200">{item.minInvestUsdt.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT</p>
+                        </div>
+                      </div>
+
+                      {/* Row 4: 24h/总匹配次数 / 7天最大回撤 */}
+                      <div className="grid grid-cols-2 gap-x-3 mt-2.5 pt-2.5 border-t border-[#2B2F36]">
+                        <div>
+                          <p className="text-[11px] text-slate-500 mb-0.5">24小时/总匹配次数</p>
+                          <p className="text-[13px] font-semibold text-slate-300">{item.matchCount}/{item.totalGrids}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-slate-500 mb-0.5">7天最大回撤</p>
+                          <p className="text-[13px] font-semibold text-slate-300">{item.maxDrawdownPct.toFixed(2)}%</p>
                         </div>
                       </div>
                     </div>
