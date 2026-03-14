@@ -2,14 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shield, User, LogOut, Menu, X } from 'lucide-react';
+import { Shield, User, LogOut, Menu, X, Globe } from 'lucide-react';
 import { isLoggedIn, clearToken } from '@/lib/api';
 import { useState, useEffect } from 'react';
+import { useI18n } from '@/i18n';
 
 export default function Navbar() {
   const pathname = usePathname();
   const [logged, setLogged] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { t, locale, setLocale } = useI18n();
 
   useEffect(() => {
     setLogged(isLoggedIn());
@@ -23,11 +25,13 @@ export default function Navbar() {
     window.location.href = '/';
   };
 
+  const toggleLang = () => setLocale(locale === 'zh' ? 'en' : 'zh');
+
   const allLinks = [
-    { href: '/', label: '首页' },
-    { href: '/grid', label: '网格量化' },
-    { href: '/pricing', label: 'AI 扫描' },
-    { href: '/docs', label: 'API 文档' },
+    { href: '/', label: t('nav.home') },
+    { href: '/grid', label: t('nav.grid') },
+    { href: '/pricing', label: t('nav.pricing') },
+    { href: '/docs', label: t('nav.docs') },
   ];
 
   const isActive = (href: string) => href === '/' ? pathname === '/' : pathname.startsWith(href);
@@ -66,7 +70,17 @@ export default function Navbar() {
               </Link>
             ))}
 
-            <div className="w-px h-5 bg-white/[0.08] mx-3" />
+            {/* Language Switcher */}
+            <button
+              onClick={toggleLang}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-400 hover:text-white rounded-lg hover:bg-white/[0.04] transition-all duration-200"
+              title={locale === 'zh' ? 'English' : '中文'}
+            >
+              <Globe className="w-4 h-4" />
+              <span>{locale === 'zh' ? 'EN' : '中'}</span>
+            </button>
+
+            <div className="w-px h-5 bg-white/[0.08] mx-1" />
 
             {logged ? (
               <div className="flex items-center gap-1.5">
@@ -81,7 +95,7 @@ export default function Navbar() {
                   <div className="w-6 h-6 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center">
                     <User className="w-3.5 h-3.5 text-white" />
                   </div>
-                  我的
+                  {t('nav.myAccount')}
                   {pathname === '/dashboard' && (
                     <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-5 h-[2px] rounded-full bg-gradient-to-r from-cyan-400 to-blue-500" />
                   )}
@@ -89,7 +103,7 @@ export default function Navbar() {
                 <button
                   onClick={handleLogout}
                   className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
-                  title="退出登录"
+                  title={t('nav.logout')}
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
@@ -97,12 +111,12 @@ export default function Navbar() {
             ) : (
               <div className="flex items-center gap-2">
                 <Link href="/login" className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white rounded-lg hover:bg-white/[0.04] transition-all duration-200">
-                  登录
+                  {t('nav.login')}
                 </Link>
                 <Link href="/register" className="group relative px-5 py-2 text-sm font-semibold text-white rounded-lg overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/25">
                   <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-600 transition-all duration-300 group-hover:from-cyan-400 group-hover:to-blue-500" />
                   <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <span className="relative">免费注册</span>
+                  <span className="relative">{t('nav.register')}</span>
                 </Link>
               </div>
             )}
@@ -133,20 +147,28 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
+            {/* Mobile Language Switcher */}
+            <button
+              onClick={toggleLang}
+              className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all"
+            >
+              <Globe className="w-4 h-4" />
+              {locale === 'zh' ? 'English' : '中文'}
+            </button>
             <div className="h-px bg-white/[0.06] my-2" />
             {logged ? (
               <>
                 <Link href="/dashboard" className="block px-4 py-3 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all">
-                  我的账户
+                  {t('nav.mobileAccount')}
                 </Link>
                 <button onClick={handleLogout} className="w-full text-left px-4 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all">
-                  退出登录
+                  {t('nav.logout')}
                 </button>
               </>
             ) : (
               <div className="flex gap-2 pt-1">
-                <Link href="/login" className="flex-1 py-3 text-center text-sm font-medium text-slate-300 rounded-xl border border-white/[0.08] hover:bg-white/[0.04] transition-all">登录</Link>
-                <Link href="/register" className="flex-1 py-3 text-center text-sm font-semibold text-white rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600">免费注册</Link>
+                <Link href="/login" className="flex-1 py-3 text-center text-sm font-medium text-slate-300 rounded-xl border border-white/[0.08] hover:bg-white/[0.04] transition-all">{t('nav.login')}</Link>
+                <Link href="/register" className="flex-1 py-3 text-center text-sm font-semibold text-white rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600">{t('nav.register')}</Link>
               </div>
             )}
           </div>

@@ -245,73 +245,80 @@ async function processScanJob(job: any) {
     }
 
     const GROUP_LABELS: Record<string, string> = {
-      G1: '💰 宏观流动性', G2: '🏦 央行与利率政策', G3: '⚖️ 监管与合规',
-      G4: '🏛️ 机构资金流', G5: '⛓️ 链上物理流', G6: '📐 市场结构',
-      G7: '🧠 情绪指标', G8: '🚀 叙事与赛道', G9: '🦢 黑天鹅与安全',
-      G10: '🎯 关键人物与地缘',
+      G1: '💰 Macro Liquidity / 宏观流动性', G2: '🏦 Central Bank & Rates / 央行与利率政策', G3: '⚖️ Regulation & Compliance / 监管与合规',
+      G4: '🏛️ Institutional Flow / 机构资金流', G5: '⛓️ On-chain Flow / 链上物理流', G6: '📐 Market Structure / 市场结构',
+      G7: '🧠 Sentiment / 情绪指标', G8: '🚀 Narratives & Sectors / 叙事与赛道', G9: '🦢 Black Swan & Security / 黑天鹅与安全',
+      G10: '🎯 Key Figures & Geopolitics / 关键人物与地缘',
     };
 
     let signalListText = '';
     for (const [group, sigs] of [...groupMap.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
       signalListText += `\n### ${GROUP_LABELS[group] || group}\n`;
       for (const sig of sigs) {
-        signalListText += `  #${sig.signalId} | ${sig.name} | 权重=${sig.impact} | 半衰期=${sig.halfLife}min | 归类=${sig.category} | 条件: ${sig.triggerCondition}\n`;
+        signalListText += `  #${sig.signalId} | ${sig.name} | impact=${sig.impact} | halfLife=${sig.halfLife}min | category=${sig.category} | trigger: ${sig.triggerCondition}\n`;
       }
     }
 
     const analyzerPrompt = await getPromptTemplate('analyzer_prompt');
 
-    const analysisInput = `你是 AlphaSentinel AI 交易系统的信号分析引擎。你的任务是基于下方提供的**搜索情报**，精确判断${enabledSignals.length}条信号矩阵中哪些正在被触发。
+    const analysisInput = `You are the signal analysis engine of AlphaSentinel AI trading system. Your task is to evaluate which of the ${enabledSignals.length} signals in the matrix below are currently being triggered, based on the **search intelligence** provided.
 
-${searchContext ? `## 🔍 联网搜索情报\n${searchContext}\n` : '（无搜索情报，请基于你的训练数据中最近的市场知识进行分析）'}
+${searchContext ? `## 🔍 Search Intelligence\n${searchContext}\n` : '(No search intelligence available. Analyze based on your most recent market knowledge.)'}
 
-## 信号矩阵 (共 ${enabledSignals.length} 条)
+## Signal Matrix (${enabledSignals.length} signals)
 ${signalListText}
 
-## 分析指令
-1. 结合上方搜索情报，逐条评估信号是否被触发
-2. 只返回**有实际数据/新闻/事件支持**的信号，不要凭空编造
-3. 对每个被触发的信号，给出实际的 impact 值（正数=利多, 负数=利空），取值范围参考原始权重
-4. 置信度必须基于数据可靠性: 有确凿数据=1.0, 有可靠新闻=0.8, 合理推断=0.5, 不确定=0.3
-5. 如发现致命风险信号（交易所暴雷、稳定币脱锚等），务必在 alerts 中标记 level:"critical"
+## Analysis Instructions
+1. Evaluate each signal against the search intelligence above
+2. Only return signals that have **actual data/news/events** supporting them — do NOT fabricate
+3. For each triggered signal, provide the actual impact value (positive=bullish, negative=bearish), reference the original weight for range
+4. Confidence must be based on data reliability: solid data=1.0, reliable news=0.8, reasonable inference=0.5, uncertain=0.3
+5. If fatal risk signals are found (exchange collapse, stablecoin depeg, etc.), mark them as level:"critical" in alerts
 
-## 严格按以下 JSON 格式返回：
+## Return STRICTLY in the following JSON format:
 
 \`\`\`json
 {
   "triggeredSignals": [
     {
-      "signalId": <信号编号>,
-      "impact": <实际权重值，正或负>,
-      "confidence": <0-1 置信度>,
-      "title": "<事件标题，20字内>",
-      "summary": "<事件摘要与市场影响分析，50-150字>",
-      "source": "<信息来源>"
+      "signalId": <signal number>,
+      "impact": <actual weight value, positive or negative>,
+      "confidence": <0-1 confidence>,
+      "title": "<event title in Chinese, within 20 chars>",
+      "titleEn": "<event title in English, within 40 chars>",
+      "summary": "<event summary and market impact analysis in Chinese, 50-150 chars>",
+      "summaryEn": "<event summary and market impact analysis in English, 50-200 chars>",
+      "source": "<information source>"
     }
   ],
   "alerts": [
     {
-      "title": "<突发事件标题>",
-      "description": "<详细描述>",
+      "title": "<alert title in Chinese>",
+      "titleEn": "<alert title in English>",
+      "description": "<detailed description in Chinese>",
+      "descriptionEn": "<detailed description in English>",
       "level": "critical|warning|info",
-      "group": "<所属组 G1-G10>",
-      "signalId": <关联信号编号>,
+      "group": "<group G1-G10>",
+      "signalId": <related signal number>,
       "relatedCoins": ["BTC", ...],
-      "source": "<来源>"
+      "source": "<source>"
     }
   ],
-  "marketSummary": "<100字整体市场状态概述>"
+  "marketSummary": "<100-char overall market status summary in Chinese>",
+  "marketSummaryEn": "<100-word overall market status summary in English>"
 }
 \`\`\`
 
-## 重要
-- 没有触发任何信号也是正常的，返回空数组
-- impact 正负号代表对加密市场的方向影响（正=利多，负=利空）
-- 使用中文回复`;
+## Important
+- It is normal if no signals are triggered — return empty arrays
+- impact sign represents direction impact on crypto market (positive=bullish, negative=bearish)
+- You MUST provide BOTH Chinese and English versions for title/titleEn, summary/summaryEn, marketSummary/marketSummaryEn
+- Chinese fields (title, summary, marketSummary) must be in Chinese
+- English fields (titleEn, summaryEn, marketSummaryEn) must be in English`;
 
     const analysisResult = await callLLM(
       analyzerPipeline,
-      analyzerPrompt || '你是 AlphaSentinel AI 加密市场信号分析引擎。请始终用中文回复，严格按要求的 JSON 格式输出。只报告有真实事件支持的信号触发。',
+      analyzerPrompt || 'You are the AlphaSentinel AI crypto market signal analysis engine. Output strictly in the required JSON format. Only report signal triggers backed by real events. You MUST provide both Chinese and English text for all title/summary/marketSummary fields.',
       analysisInput,
     );
     const analyzerTokens = analysisResult.usage.totalTokens;

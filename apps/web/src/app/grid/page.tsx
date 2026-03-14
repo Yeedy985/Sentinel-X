@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { useI18n } from '@/i18n';
 
 // ==================== 策略广场 ====================
 interface PlazaItem {
@@ -51,6 +52,7 @@ function fmtRuntime(s: number) {
 
 // ==================== 网格量化页面 ====================
 export default function GridPage() {
+  const { t, locale } = useI18n();
   const PAGE_SIZE = 6;
   const [items, setItems] = useState<PlazaItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,12 +83,12 @@ export default function GridPage() {
   ];
 
   const highlights = [
-    { icon: Grid3X3, text: '币安现货网格全自动交易' },
-    { icon: Zap, text: 'AI 扫描结果自动驱动策略调参' },
-    { icon: Share2, text: '一键分享你的策略到广场' },
-    { icon: Copy, text: '一键复制高手的策略参数' },
-    { icon: LineChart, text: '实时收益曲线和详细报表' },
-    { icon: Bell, text: '异常和熔断即时通知到手机' },
+    { icon: Grid3X3, text: t('grid.highlight1') },
+    { icon: Zap, text: t('grid.highlight2') },
+    { icon: Share2, text: t('grid.highlight3') },
+    { icon: Copy, text: t('grid.highlight4') },
+    { icon: LineChart, text: t('grid.highlight5') },
+    { icon: Bell, text: t('grid.highlight6') },
   ];
 
   return (
@@ -101,13 +103,13 @@ export default function GridPage() {
             <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
               <Grid3X3 className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="text-amber-300">网格量化交易</span>
+            <span className="text-amber-300">{t('grid.badge')}</span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4">
-            <span className="bg-gradient-to-r from-amber-300 via-orange-300 to-amber-400 bg-clip-text text-transparent">策略广场</span>
-            <span className="text-white"> & AAGS 客户端</span>
+            <span className="bg-gradient-to-r from-amber-300 via-orange-300 to-amber-400 bg-clip-text text-transparent">{t('grid.title1')}</span>
+            <span className="text-white">{t('grid.title2')}</span>
           </h1>
-          <p className="text-base text-slate-400 max-w-xl mx-auto">看看别人怎么赚钱，一键复制高手参数，AI 驱动的网格量化自动交易</p>
+          <p className="text-base text-slate-400 max-w-xl mx-auto">{t('grid.subtitle')}</p>
         </div>
       </section>
 
@@ -122,15 +124,15 @@ export default function GridPage() {
                   <TrendingUp className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-extrabold tracking-tight">实盘策略排行</h2>
-                  <p className="text-sm text-slate-400 mt-0.5">真实用户分享的实盘策略，收益和参数完全透明</p>
+                  <h2 className="text-2xl font-extrabold tracking-tight">{t('grid.plazaTitle')}</h2>
+                  <p className="text-sm text-slate-400 mt-0.5">{t('grid.plazaSubtitle')}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 {([
-                  { key: 'pnl' as const, label: '收益最高' },
-                  { key: 'copies' as const, label: '复制最多' },
-                  { key: 'newest' as const, label: '最新' },
+                  { key: 'pnl' as const, label: t('grid.sortPnl') },
+                  { key: 'copies' as const, label: t('grid.sortCopies') },
+                  { key: 'newest' as const, label: t('grid.sortNewest') },
                 ]).map(opt => (
                   <button
                     key={opt.key}
@@ -144,7 +146,7 @@ export default function GridPage() {
                     {opt.label}
                   </button>
                 ))}
-                <button onClick={() => loadPlaza(page, sort)} disabled={loading} className="p-2.5 rounded-lg hover:bg-white/[0.04] text-slate-400 hover:text-slate-200 transition-all ml-1" title="刷新">
+                <button onClick={() => loadPlaza(page, sort)} disabled={loading} className="p-2.5 rounded-lg hover:bg-white/[0.04] text-slate-400 hover:text-slate-200 transition-all ml-1" title={t('grid.refresh')}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </button>
               </div>
@@ -154,18 +156,18 @@ export default function GridPage() {
             {loading && items.length === 0 ? (
               <div className="text-center py-16">
                 <RefreshCw className="w-8 h-8 text-amber-400/50 animate-spin mx-auto mb-4" />
-                <p className="text-base text-slate-400 font-medium">加载策略数据...</p>
+                <p className="text-base text-slate-400 font-medium">{t('grid.loading')}</p>
               </div>
             ) : items.length === 0 ? (
               <div className="text-center py-16 rounded-2xl bg-gradient-to-b from-white/[0.03] to-white/[0.01] border border-white/[0.06]">
                 <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/10 flex items-center justify-center mx-auto mb-5">
                   <BarChart3 className="w-10 h-10 text-amber-500/40" />
                 </div>
-                <p className="text-xl font-bold text-slate-300 mb-2">策略广场即将上线</p>
-                <p className="text-sm text-slate-500 max-w-sm mx-auto leading-relaxed">下载 AAGS 客户端，创建并分享你的网格策略，即可展示在这里</p>
+                <p className="text-xl font-bold text-slate-300 mb-2">{t('grid.emptyTitle')}</p>
+                <p className="text-sm text-slate-500 max-w-sm mx-auto leading-relaxed">{t('grid.emptyDesc')}</p>
                 <a href="#download" className="inline-flex items-center gap-2 mt-6 px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500/15 to-orange-500/10 text-amber-400 border border-amber-500/20 text-sm font-semibold hover:from-amber-500/25 hover:to-orange-500/15 transition-all">
                   <Download className="w-4 h-4" />
-                  下载 AAGS 客户端
+                  {t('grid.downloadAAGS')}
                 </a>
               </div>
             ) : (
@@ -178,7 +180,7 @@ export default function GridPage() {
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2">
                           <span className="text-[15px] font-bold text-white tracking-tight">{item.baseAsset}/{item.quoteAsset}</span>
-                          <span className="text-[11px] text-slate-500 bg-[#2B2F36] px-1.5 py-0.5 rounded font-medium">{item.totalGrids}格</span>
+                          <span className="text-[11px] text-slate-500 bg-[#2B2F36] px-1.5 py-0.5 rounded font-medium">{item.totalGrids}{locale === 'zh' ? '格' : ' grids'}</span>
                           <span className="relative flex h-2 w-2">
                             {item.isRunning && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40" />}
                             <span className={`relative inline-flex rounded-full h-2 w-2 ${item.isRunning ? 'bg-emerald-400' : 'bg-slate-600'}`} />
@@ -190,7 +192,7 @@ export default function GridPage() {
                       {/* Row 2: 盈亏标签 + 收益曲线 */}
                       <div className="flex items-end justify-between mb-0.5">
                         <div>
-                          <p className="text-[11px] text-slate-500 mb-1">盈亏 (USD)</p>
+                          <p className="text-[11px] text-slate-500 mb-1">{t('grid.pnlLabel')}</p>
                           <p className={`text-xl font-bold tabular-nums tracking-tight leading-none ${pos ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
                             {pos ? '+' : ''}{item.pnlUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
@@ -201,17 +203,17 @@ export default function GridPage() {
                       {/* Row 3: 收益率 / 运行时间 / 最小投资额 */}
                       <div className="grid grid-cols-3 gap-x-3 mt-3">
                         <div>
-                          <p className="text-[11px] text-slate-500 mb-0.5">收益率</p>
+                          <p className="text-[11px] text-slate-500 mb-0.5">{t('grid.returnRate')}</p>
                           <p className={`text-[13px] font-bold ${pos ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
                             {pos ? '+' : ''}{item.pnlPercent.toFixed(2)}%
                           </p>
                         </div>
                         <div>
-                          <p className="text-[11px] text-slate-500 mb-0.5">运行时间</p>
+                          <p className="text-[11px] text-slate-500 mb-0.5">{t('grid.runtime')}</p>
                           <p className="text-[13px] font-semibold text-slate-200">{fmtRuntime(item.runSeconds)}</p>
                         </div>
                         <div>
-                          <p className="text-[11px] text-slate-500 mb-0.5">最小投资额</p>
+                          <p className="text-[11px] text-slate-500 mb-0.5">{t('grid.minInvest')}</p>
                           <p className="text-[13px] font-semibold text-slate-200">{item.minInvestUsdt.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDT</p>
                         </div>
                       </div>
@@ -219,11 +221,11 @@ export default function GridPage() {
                       {/* Row 4: 24h/总匹配次数 / 7天最大回撤 */}
                       <div className="grid grid-cols-2 gap-x-3 mt-2.5 pt-2.5 border-t border-[#2B2F36]">
                         <div>
-                          <p className="text-[11px] text-slate-500 mb-0.5">24小时/总匹配次数</p>
+                          <p className="text-[11px] text-slate-500 mb-0.5">{t('grid.matchCount')}</p>
                           <p className="text-[13px] font-semibold text-slate-300">{item.matchCount}/{item.totalGrids}</p>
                         </div>
                         <div>
-                          <p className="text-[11px] text-slate-500 mb-0.5">7天最大回撤</p>
+                          <p className="text-[11px] text-slate-500 mb-0.5">{t('grid.maxDrawdown')}</p>
                           <p className="text-[13px] font-semibold text-slate-300">{item.maxDrawdownPct.toFixed(2)}%</p>
                         </div>
                       </div>
@@ -258,7 +260,7 @@ export default function GridPage() {
               </div>
             )}
 
-            <p className="text-center text-xs text-slate-500 mt-6">所有数据由用户实盘实时上报，完全透明 · 在客户端中可一键复制高手参数</p>
+            <p className="text-center text-xs text-slate-500 mt-6">{t('grid.dataNote')}</p>
           </section>
 
           {/* ═══════ AAGS 下载 ═══════ */}
@@ -266,10 +268,10 @@ export default function GridPage() {
             <div className="text-center mb-10">
               <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-cyan-500/[0.08] border border-cyan-500/[0.15] text-sm font-medium mb-5">
                 <Download className="w-4 h-4 text-cyan-400" />
-                <span className="text-cyan-300">客户端下载</span>
+                <span className="text-cyan-300">{t('grid.downloadBadge')}</span>
               </div>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3">AAGS 客户端</h2>
-              <p className="text-base text-slate-400">下载即用，连接你的币安账户，让 AI 驱动的网格策略自动替你交易</p>
+              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3">{t('grid.clientTitle')}</h2>
+              <p className="text-base text-slate-400">{t('grid.clientDesc')}</p>
             </div>
 
             <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
@@ -287,9 +289,9 @@ export default function GridPage() {
                       {dl.comingSoon ? (
                         <>
                           <span className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold text-slate-500 bg-white/[0.04] border border-white/[0.08] cursor-not-allowed">
-                            即将上线
+                            {t('grid.comingSoon')}
                           </span>
-                          <p className="text-xs text-slate-600 mt-4">敬请期待</p>
+                          <p className="text-xs text-slate-600 mt-4">{t('grid.stayTuned')}</p>
                         </>
                       ) : (
                         <>
@@ -300,9 +302,9 @@ export default function GridPage() {
                             <div className={`absolute inset-0 bg-gradient-to-r ${dl.gradient}`} />
                             <div className={`absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity`} />
                             <Download className="relative w-4 h-4" />
-                            <span className="relative">下载 {dl.ext}</span>
+                            <span className="relative">{t('grid.download')} {dl.ext}</span>
                           </a>
-                          <p className="text-xs text-slate-500 mt-4">v1.0.0 · 约 {dl.size}</p>
+                          <p className="text-xs text-slate-500 mt-4">v1.0.0 · {t('common.about')} {dl.size}</p>
                         </>
                       )}
                     </div>
@@ -313,7 +315,7 @@ export default function GridPage() {
 
             {/* 功能亮点 */}
             <div className="mt-10 max-w-3xl mx-auto p-8 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
-              <h4 className="text-lg font-bold mb-6 text-center">功能亮点</h4>
+              <h4 className="text-lg font-bold mb-6 text-center">{t('grid.highlightsTitle')}</h4>
               <div className="grid sm:grid-cols-2 gap-3">
                 {highlights.map((h, i) => {
                   const Icon = h.icon;

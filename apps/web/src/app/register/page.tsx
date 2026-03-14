@@ -5,9 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Shield, Loader2, Mail, Lock, User, ArrowLeft, Sparkles } from 'lucide-react';
 import { api, setToken } from '@/lib/api';
+import { useI18n } from '@/i18n';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { t, locale } = useI18n();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
@@ -34,10 +36,10 @@ export default function RegisterPage() {
         setToken(data.token);
         router.push('/dashboard');
       } else {
-        setError(res.error || '注册失败');
+        setError(res.error || t('auth.registerBtn') + ' failed');
       }
     } catch {
-      setError('连接服务器失败，请检查网络后重试');
+      setError(t('common.error'));
     } finally {
       setLoading(false);
     }
@@ -49,7 +51,7 @@ export default function RegisterPage() {
       <div className="absolute bottom-1/4 right-1/3 w-[300px] h-[300px] bg-violet-500/[0.03] rounded-full blur-[120px] pointer-events-none" />
 
       <Link href="/" className="absolute top-6 left-6 flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors">
-        <ArrowLeft className="w-4 h-4" /> 返回首页
+        <ArrowLeft className="w-4 h-4" /> {t('common.back')}
       </Link>
 
       <div className="relative w-full max-w-sm">
@@ -61,7 +63,7 @@ export default function RegisterPage() {
             </div>
             <span className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">AlphaSentinel</span>
           </Link>
-          <p className="text-slate-400 mt-3 text-sm">注册即可体验 AI 驱动的加密市场智能扫描</p>
+          <p className="text-slate-400 mt-3 text-sm">{t('auth.registerSubtitle')}</p>
         </div>
 
         {bonusTokens != null && bonusTokens > 0 && (
@@ -70,7 +72,10 @@ export default function RegisterPage() {
               <Sparkles className="w-4 h-4 text-white" />
             </div>
             <p className="text-sm text-emerald-300 font-medium">
-              注册即送 <span className="text-emerald-200 font-bold">{bonusTokens.toLocaleString()}</span> Token，足够体验多次完整的 AI 市场扫描
+              {locale === 'zh'
+                ? <>注册即送 <span className="text-emerald-200 font-bold">{bonusTokens.toLocaleString()}</span> Token，足够体验多次完整的 AI 市场扫描</>
+                : <>Get <span className="text-emerald-200 font-bold">{bonusTokens.toLocaleString()}</span> free tokens on sign up, enough for multiple full AI market scans</>
+              }
             </p>
           </div>
         )}
@@ -85,7 +90,7 @@ export default function RegisterPage() {
             )}
 
             <div>
-              <label className="text-[11px] font-semibold text-slate-500 block mb-2 uppercase tracking-wider">昵称 <span className="normal-case text-slate-600">(可选)</span></label>
+              <label className="text-[11px] font-semibold text-slate-500 block mb-2 uppercase tracking-wider">{t('auth.nickname')} <span className="normal-case text-slate-600">{locale === 'zh' ? '(可选)' : '(optional)'}</span></label>
               <div className="relative">
                 <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
                 <input
@@ -93,13 +98,13 @@ export default function RegisterPage() {
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
                   className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-[14px] text-white placeholder-slate-600 focus:border-cyan-500/40 focus:bg-white/[0.04] focus:outline-none transition-all duration-200"
-                  placeholder="你的昵称"
+                  placeholder={locale === 'zh' ? '你的昵称' : 'Your nickname'}
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold text-slate-500 block mb-2 uppercase tracking-wider">邮箱</label>
+              <label className="text-[11px] font-semibold text-slate-500 block mb-2 uppercase tracking-wider">{t('auth.email')}</label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
                 <input
@@ -114,7 +119,7 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold text-slate-500 block mb-2 uppercase tracking-wider">密码</label>
+              <label className="text-[11px] font-semibold text-slate-500 block mb-2 uppercase tracking-wider">{t('auth.password')}</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
                 <input
@@ -122,7 +127,7 @@ export default function RegisterPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-[14px] text-white placeholder-slate-600 focus:border-cyan-500/40 focus:bg-white/[0.04] focus:outline-none transition-all duration-200"
-                  placeholder="至少6位密码"
+                  placeholder={locale === 'zh' ? '至少6位密码' : 'Min 6 characters'}
                   required
                   minLength={6}
                 />
@@ -138,16 +143,16 @@ export default function RegisterPage() {
               <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <span className="relative flex items-center justify-center gap-2">
                 {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                注册
+                {t('auth.registerBtn')}
               </span>
             </button>
           </form>
         </div>
 
         <p className="text-center text-sm text-slate-500 mt-8">
-          已有账号？{' '}
+          {t('auth.hasAccount')}{' '}
           <Link href="/login" className="text-cyan-400 hover:text-cyan-300 font-semibold transition-colors">
-            登录
+            {t('auth.goLogin')}
           </Link>
         </p>
       </div>

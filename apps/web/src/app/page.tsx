@@ -10,6 +10,7 @@ import {
 import { api } from '@/lib/api';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { useI18n } from '@/i18n';
 
 function useSiteConfig() {
   const [bonusTokens, setBonusTokens] = useState<number | null>(null);
@@ -86,15 +87,16 @@ function ParticleField() {
 // ==================== 主页 ====================
 export default function HomePage() {
   const { bonusTokens } = useSiteConfig();
+  const { t, locale } = useI18n();
 
   const products = [
     {
       href: '/pricing',
       icon: Brain,
       color: 'cyan',
-      title: 'AI 全链路扫描',
-      desc: '每小时自动扫描全球加密市场，Perplexity 实时联网 + DeepSeek/Gemini 深度推理，300+ 信号量化为方向·波动·风险三大指数',
-      cta: '了解定价',
+      title: locale === 'zh' ? 'AI 全链路扫描' : 'AI Full-Chain Scan',
+      desc: locale === 'zh' ? '每小时自动扫描全球加密市场，Perplexity 实时联网 + DeepSeek/Gemini 深度推理，300+ 信号量化为方向·波动·风险三大指数' : 'Auto-scan global crypto markets every hour. Perplexity real-time web search + DeepSeek/Gemini deep reasoning, 300+ signals quantified into Direction · Volatility · Risk indices',
+      cta: locale === 'zh' ? '了解定价' : 'View Pricing',
       gradient: 'from-cyan-500/20 via-cyan-500/5 to-transparent',
       border: 'hover:border-cyan-500/30',
       iconBg: 'from-cyan-500 to-blue-600',
@@ -104,9 +106,9 @@ export default function HomePage() {
       href: '/grid',
       icon: Grid3X3,
       color: 'amber',
-      title: '网格量化交易',
-      desc: '基于 AI 扫描结果自动调参的三层网格策略，实盘策略广场排行，一键复制高手参数，AAGS 客户端跨平台运行',
-      cta: '浏览策略',
+      title: locale === 'zh' ? '网格量化交易' : 'Grid Quantitative Trading',
+      desc: locale === 'zh' ? '基于 AI 扫描结果自动调参的三层网格策略，实盘策略广场排行，一键复制高手参数，AAGS 客户端跨平台运行' : 'AI-driven 3-layer grid strategy with auto-tuning, live strategy plaza ranking, one-click copy expert params, AAGS cross-platform client',
+      cta: locale === 'zh' ? '浏览策略' : 'Browse Strategies',
       gradient: 'from-amber-500/20 via-amber-500/5 to-transparent',
       border: 'hover:border-amber-500/30',
       iconBg: 'from-amber-500 to-orange-600',
@@ -116,9 +118,9 @@ export default function HomePage() {
       href: '/docs',
       icon: Code2,
       color: 'violet',
-      title: 'API 开发接口',
-      desc: '将扫描能力集成到你自己的交易系统，RESTful API + SSE 实时推送，完整接口文档与代码示例',
-      cta: '查看文档',
+      title: locale === 'zh' ? 'API 开发接口' : 'Developer API',
+      desc: locale === 'zh' ? '将扫描能力集成到你自己的交易系统，RESTful API + SSE 实时推送，完整接口文档与代码示例' : 'Integrate scanning into your trading system. RESTful API + SSE real-time push, complete docs & code examples',
+      cta: locale === 'zh' ? '查看文档' : 'View Docs',
       gradient: 'from-violet-500/20 via-violet-500/5 to-transparent',
       border: 'hover:border-violet-500/30',
       iconBg: 'from-violet-500 to-purple-600',
@@ -129,44 +131,44 @@ export default function HomePage() {
   const whyNeeded = [
     {
       icon: Eye,
-      title: '信息严重爆炸，人脑无法处理',
-      desc: '加密市场 24/7 不间断，全球新闻、链上数据、宏观政策、社交情绪……每天产生的信息量远超任何人能消化的极限。不借助顶级 AI 模型来检索、过滤和分析，你永远无法得知真实的市场全貌。',
+      title: locale === 'zh' ? '信息严重爆炸，人脑无法处理' : 'Information Overload Beyond Human Capacity',
+      desc: locale === 'zh' ? '加密市场 24/7 不间断，全球新闻、链上数据、宏观政策、社交情绪……每天产生的信息量远超任何人能消化的极限。不借助顶级 AI 模型来检索、过滤和分析，你永远无法得知真实的市场全貌。' : 'Crypto markets run 24/7 — global news, on-chain data, macro policies, social sentiment… The daily information volume far exceeds what any human can process. Without top AI models to search, filter and analyze, you can never see the full market picture.',
       color: 'from-cyan-500 to-blue-600',
     },
     {
       icon: TrendingUp,
-      title: '信息差 = 决策优势',
-      desc: '全面信息化时代，人与人之间的信息差正在被拉平——但往往就是那一点点细小的信息差，决定了你比别人更聪明的选择。让你的信息始终领先一步，让你的每一次决策都建立在科学分析之上。',
+      title: locale === 'zh' ? '信息差 = 决策优势' : 'Information Edge = Decision Advantage',
+      desc: locale === 'zh' ? '全面信息化时代，人与人之间的信息差正在被拉平——但往往就是那一点点细小的信息差，决定了你比别人更聪明的选择。让你的信息始终领先一步，让你的每一次决策都建立在科学分析之上。' : 'In the information age, gaps between people are narrowing — but it\'s often that tiny edge that determines smarter choices. Keep your information one step ahead, make every decision based on scientific analysis.',
       color: 'from-emerald-500 to-teal-600',
     },
     {
       icon: Clock,
-      title: '全自动扫描，永不遗漏',
-      desc: '设置每小时一次的全自动扫描，连接 Telegram / WhatsApp 即时通知。你的每一次微小成本，都换来全球最新消息的完美分析结果——你在睡觉，AI 在替你看盘。',
+      title: locale === 'zh' ? '全自动扫描，永不遗漏' : 'Fully Automated, Never Miss a Beat',
+      desc: locale === 'zh' ? '设置每小时一次的全自动扫描，连接 Telegram / WhatsApp 即时通知。你的每一次微小成本，都换来全球最新消息的完美分析结果——你在睡觉，AI 在替你看盘。' : 'Set hourly auto-scans with Telegram / WhatsApp instant alerts. Every small cost brings you perfectly analyzed global news — while you sleep, AI watches the market for you.',
       color: 'from-amber-500 to-orange-600',
     },
     {
       icon: MessageSquare,
-      title: '极低成本，极高回报',
-      desc: '一次扫描的成本不到一杯咖啡的零头，但它综合了 13+ 数据源、300+ 信号维度、顶级 AI 模型的深度推理。你得到的不是原始数据，而是经过充分分析的可执行洞察。',
+      title: locale === 'zh' ? '极低成本，极高回报' : 'Ultra-Low Cost, Ultra-High Value',
+      desc: locale === 'zh' ? '一次扫描的成本不到一杯咖啡的零头，但它综合了 13+ 数据源、300+ 信号维度、顶级 AI 模型的深度推理。你得到的不是原始数据，而是经过充分分析的可执行洞察。' : 'A single scan costs less than a fraction of a coffee, yet it combines 13+ data sources, 300+ signal dimensions, and top AI deep reasoning. You get actionable insights, not raw data.',
       color: 'from-violet-500 to-purple-600',
     },
   ];
 
   const stats = [
-    { num: '300+', label: '信号矩阵覆盖', icon: Radio, color: 'from-cyan-400 to-blue-500' },
-    { num: '10', label: '信号分组类别', icon: BarChart3, color: 'from-emerald-400 to-teal-500' },
-    { num: '3', label: '核心指数 SD/SV/SR', icon: Activity, color: 'from-amber-400 to-orange-500' },
-    { num: '24/7', label: '实时扫描推送', icon: Zap, color: 'from-violet-400 to-purple-500' },
+    { num: '300+', label: locale === 'zh' ? '信号矩阵覆盖' : 'Signal Matrix', icon: Radio, color: 'from-cyan-400 to-blue-500' },
+    { num: '10', label: locale === 'zh' ? '信号分组类别' : 'Signal Groups', icon: BarChart3, color: 'from-emerald-400 to-teal-500' },
+    { num: '3', label: locale === 'zh' ? '核心指数 SD/SV/SR' : 'Core Indices SD/SV/SR', icon: Activity, color: 'from-amber-400 to-orange-500' },
+    { num: '24/7', label: locale === 'zh' ? '实时扫描推送' : 'Real-time Push', icon: Zap, color: 'from-violet-400 to-purple-500' },
   ];
 
   const features = [
-    { icon: Globe, title: '13+ 全球数据源', desc: 'Binance · CoinGecko · DeFi Llama · Alternative.me 等实时采集，覆盖价格、链上、宏观、情绪全维度' },
-    { icon: Cpu, title: '顶级 AI 模型管线', desc: 'Perplexity 实时联网搜索 + DeepSeek / Gemini 深度推理，不是简单汇总，而是真正的分析与判断' },
-    { icon: LineChart, title: '300+ 信号量化引擎', desc: '时间衰减 · 置信度加权 · 多模型交叉验证，输出方向 / 波动 / 风险三大可执行指数' },
-    { icon: Lock, title: '安全透明', desc: 'API Token 鉴权 · AES-256 加密存储 · 扫描失败自动退费 · 开源透明' },
-    { icon: Sparkles, title: 'AI 驱动网格调参', desc: '扫描结果直接驱动网格策略自动调整间距、偏移、熔断参数，真正的 AI + 量化闭环' },
-    { icon: Shield, title: '风控 + 即时通知', desc: '风险过高自动熔断 · 最大回撤监控 · Telegram / WhatsApp 即时推送，你在睡觉也安心' },
+    { icon: Globe, title: locale === 'zh' ? '13+ 全球数据源' : '13+ Global Data Sources', desc: locale === 'zh' ? 'Binance · CoinGecko · DeFi Llama · Alternative.me 等实时采集，覆盖价格、链上、宏观、情绪全维度' : 'Real-time collection from Binance · CoinGecko · DeFi Llama · Alternative.me, covering price, on-chain, macro, and sentiment dimensions' },
+    { icon: Cpu, title: locale === 'zh' ? '顶级 AI 模型管线' : 'Top AI Model Pipeline', desc: locale === 'zh' ? 'Perplexity 实时联网搜索 + DeepSeek / Gemini 深度推理，不是简单汇总，而是真正的分析与判断' : 'Perplexity real-time web search + DeepSeek / Gemini deep reasoning — not simple aggregation, but real analysis and judgment' },
+    { icon: LineChart, title: locale === 'zh' ? '300+ 信号量化引擎' : '300+ Signal Quant Engine', desc: locale === 'zh' ? '时间衰减 · 置信度加权 · 多模型交叉验证，输出方向 / 波动 / 风险三大可执行指数' : 'Time decay · confidence weighting · multi-model cross-validation, outputting Direction / Volatility / Risk actionable indices' },
+    { icon: Lock, title: locale === 'zh' ? '安全透明' : 'Secure & Transparent', desc: locale === 'zh' ? 'API Token 鉴权 · AES-256 加密存储 · 扫描失败自动退费 · 开源透明' : 'API Token auth · AES-256 encrypted storage · auto-refund on failure · open and transparent' },
+    { icon: Sparkles, title: locale === 'zh' ? 'AI 驱动网格调参' : 'AI-Driven Grid Tuning', desc: locale === 'zh' ? '扫描结果直接驱动网格策略自动调整间距、偏移、熔断参数，真正的 AI + 量化闭环' : 'Scan results directly drive grid strategy auto-adjustment of spacing, skew, and circuit-break parameters — true AI + quant closed loop' },
+    { icon: Shield, title: locale === 'zh' ? '风控 + 即时通知' : 'Risk Control + Alerts', desc: locale === 'zh' ? '风险过高自动熔断 · 最大回撤监控 · Telegram / WhatsApp 即时推送，你在睡觉也安心' : 'Auto circuit-break on high risk · max drawdown monitoring · Telegram / WhatsApp instant push — sleep soundly' },
   ];
 
   return (
@@ -186,25 +188,27 @@ export default function HomePage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
             </span>
-            <span className="bg-gradient-to-r from-cyan-300 to-blue-400 bg-clip-text text-transparent font-semibold">AI 驱动</span>
+            <span className="bg-gradient-to-r from-cyan-300 to-blue-400 bg-clip-text text-transparent font-semibold">{locale === 'zh' ? 'AI 驱动' : 'AI-Powered'}</span>
             <span className="text-slate-500">·</span>
-            <span className="text-slate-400">300 信号矩阵</span>
+            <span className="text-slate-400">{locale === 'zh' ? '300 信号矩阵' : '300 Signal Matrix'}</span>
             <span className="text-slate-500">·</span>
-            <span className="text-slate-400">网格量化</span>
+            <span className="text-slate-400">{locale === 'zh' ? '网格量化' : 'Grid Quant'}</span>
           </div>
 
           <h1 className="text-[40px] sm:text-[56px] md:text-[64px] font-extrabold tracking-[-0.02em] leading-[1.08] mb-6">
             <span className="bg-gradient-to-r from-cyan-300 via-blue-400 to-violet-400 bg-clip-text text-transparent">
-              信息爆炸时代
+              {locale === 'zh' ? '信息爆炸时代' : 'In the Age of Information Overload'}
             </span>
             <br />
-            <span className="text-white">你需要 AI 替你看盘</span>
+            <span className="text-white">{locale === 'zh' ? '你需要 AI 替你看盘' : 'You Need AI to Watch the Market'}</span>
           </h1>
 
           <p className="text-base sm:text-lg text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            全球加密市场 24/7 不停歇，海量新闻、链上数据、宏观政策每秒涌来——
-            <br className="hidden sm:block" />
-            <span className="text-slate-300">顶级 AI 模型帮你检索、分析、判断</span>，让你的信息始终领先，决策始终科学。
+            {locale === 'zh' ? (
+              <>全球加密市场 24/7 不停歇，海量新闻、链上数据、宏观政策每秒涌来——<br className="hidden sm:block" /><span className="text-slate-300">顶级 AI 模型帮你检索、分析、判断</span>，让你的信息始终领先，决策始终科学。</>
+            ) : (
+              <>Global crypto markets never sleep. News, on-chain data, macro policies flood in every second —<br className="hidden sm:block" /><span className="text-slate-300">Top AI models search, analyze, and judge for you</span>, keeping your information ahead and decisions scientific.</>
+            )}
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
@@ -213,12 +217,12 @@ export default function HomePage() {
               <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="absolute inset-0 bg-[linear-gradient(110deg,transparent_25%,rgba(255,255,255,0.1)_50%,transparent_75%)] bg-[length:250%_100%] group-hover:animate-[shimmer_1.5s_ease-in-out]" />
               <span className="relative flex items-center justify-center gap-2">
-                {bonusTokens != null && bonusTokens > 0 ? `免费注册 · 送 ${bonusTokens.toLocaleString()} Token` : '免费注册'}
+                {bonusTokens != null && bonusTokens > 0 ? (locale === 'zh' ? `免费注册 · 送 ${bonusTokens.toLocaleString()} Token` : `Sign Up Free · ${bonusTokens.toLocaleString()} Tokens`) : t('nav.register')}
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-200" />
               </span>
             </Link>
             <Link href="/grid" className="group w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-[15px] text-slate-300 border border-white/[0.08] hover:border-white/[0.15] hover:bg-white/[0.03] hover:text-white transition-all duration-300 flex items-center justify-center gap-2">
-              探索网格量化
+              {locale === 'zh' ? '探索网格量化' : 'Explore Grid Trading'}
               <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-300 group-hover:translate-x-0.5 transition-all duration-200" />
             </Link>
           </div>
@@ -229,8 +233,8 @@ export default function HomePage() {
       <section className="py-20 sm:py-24 px-5 sm:px-8">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3">为什么你需要 AlphaSentinel</h2>
-            <p className="text-base text-slate-400">在信息严重过载的时代，不用 AI 就是在裸奔</p>
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3">{locale === 'zh' ? '为什么你需要 AlphaSentinel' : 'Why You Need AlphaSentinel'}</h2>
+            <p className="text-base text-slate-400">{locale === 'zh' ? '在信息严重过载的时代，不用 AI 就是在裸奠' : 'In an era of extreme information overload, not using AI is flying blind'}</p>
           </div>
           <div className="grid sm:grid-cols-2 gap-5 mb-20">
             {whyNeeded.map((item, i) => {
@@ -248,8 +252,8 @@ export default function HomePage() {
           </div>
 
           <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3">核心产品</h2>
-            <p className="text-base text-slate-400">从市场情报到策略执行的全链路解决方案</p>
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3">{locale === 'zh' ? '核心产品' : 'Core Products'}</h2>
+            <p className="text-base text-slate-400">{locale === 'zh' ? '从市场情报到策略执行的全链路解决方案' : 'End-to-end solution from market intelligence to strategy execution'}</p>
           </div>
           <div className="grid sm:grid-cols-3 gap-5">
             {products.map((p, i) => {
@@ -301,8 +305,8 @@ export default function HomePage() {
       <section className="py-20 sm:py-24 px-5 sm:px-8">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3">底层技术</h2>
-            <p className="text-base text-slate-400">不是简单的数据聚合，而是真正的 AI 深度分析管线</p>
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3">{locale === 'zh' ? '底层技术' : 'Under the Hood'}</h2>
+            <p className="text-base text-slate-400">{locale === 'zh' ? '不是简单的数据聚合，而是真正的 AI 深度分析管线' : 'Not simple data aggregation, but a true AI deep analysis pipeline'}</p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {features.map((f, i) => {
@@ -338,21 +342,24 @@ export default function HomePage() {
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center mx-auto mb-6 shadow-xl shadow-cyan-500/20">
                 <Sparkles className="w-6 h-6 text-white" />
               </div>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-4">让信息差成为你的优势</h2>
+              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-4">{locale === 'zh' ? '让信息差成为你的优势' : 'Make Information Edge Your Advantage'}</h2>
               <p className="text-base text-slate-400 mb-8 max-w-lg mx-auto leading-relaxed">
-                {bonusTokens != null && bonusTokens > 0 ? `注册即送 ${bonusTokens.toLocaleString()} Token，` : ''}每一次微小的成本，都换来全球最新消息的完美分析。让你的信息始终领先，决策始终科学。
+                {locale === 'zh'
+                  ? <>{bonusTokens != null && bonusTokens > 0 ? `注册即送 ${bonusTokens.toLocaleString()} Token，` : ''}每一次微小的成本，都换来全球最新消息的完美分析。让你的信息始终领先，决策始终科学。</>
+                  : <>{bonusTokens != null && bonusTokens > 0 ? `Sign up and get ${bonusTokens.toLocaleString()} free tokens. ` : ''}Every small cost brings you perfectly analyzed global insights. Stay ahead, decide scientifically.</>
+                }
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Link href="/register" className="group relative w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-[15px] overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/20 hover:-translate-y-0.5">
                   <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-600" />
                   <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                   <span className="relative flex items-center justify-center gap-2">
-                    {bonusTokens != null && bonusTokens > 0 ? `免费注册 · 送 ${bonusTokens.toLocaleString()} Token` : '免费注册'}
+                    {bonusTokens != null && bonusTokens > 0 ? (locale === 'zh' ? `免费注册 · 送 ${bonusTokens.toLocaleString()} Token` : `Sign Up Free · ${bonusTokens.toLocaleString()} Tokens`) : t('nav.register')}
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </span>
                 </Link>
                 <Link href="/grid" className="group w-full sm:w-auto px-8 py-3.5 rounded-xl font-medium text-[15px] text-slate-300 border border-white/[0.08] hover:border-white/[0.15] hover:bg-white/[0.03] hover:text-white transition-all duration-300 flex items-center justify-center gap-2">
-                  网格量化 <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors" />
+                  {locale === 'zh' ? '网格量化' : 'Grid Trading'} <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors" />
                 </Link>
               </div>
             </div>

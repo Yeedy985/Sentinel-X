@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Shield, Zap, Brain, BarChart3, Lock, FileCode, ChevronDown, Copy, Check } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { useI18n } from '@/i18n';
 
 // ==================== API 接口文档 ====================
 const API_BASE = 'https://alphinel.com';
@@ -445,6 +446,7 @@ function EndpointCard({ ep, defaultOpen = false }: { ep: ApiEndpoint; defaultOpe
 }
 
 export default function DocsPage() {
+  const { locale } = useI18n();
   const scanEndpoints = API_ENDPOINTS.filter(ep => ep.path.startsWith('/api/scan'));
   const authEndpoints = API_ENDPOINTS.filter(ep => ep.path.startsWith('/api/auth'));
   const userEndpoints = API_ENDPOINTS.filter(ep => ep.path.startsWith('/api/user'));
@@ -461,13 +463,16 @@ export default function DocsPage() {
             <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
               <FileCode className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="text-violet-300">开发者接口</span>
+            <span className="text-violet-300">{locale === 'zh' ? '开发者接口' : 'Developer API'}</span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4">
-            <span className="bg-gradient-to-r from-violet-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">API 接口文档</span>
+            <span className="bg-gradient-to-r from-violet-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">{locale === 'zh' ? 'API 接口文档' : 'API Documentation'}</span>
           </h1>
           <p className="text-base text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            将 AlphaSentinel 的 AI 扫描能力集成到你自己的交易系统或机器人，几行代码即可接入 300+ 信号扫描服务。
+            {locale === 'zh'
+              ? '将 AlphaSentinel 的 AI 扫描能力集成到你自己的交易系统或机器人，几行代码即可接入 300+ 信号扫描服务。'
+              : 'Integrate AlphaSentinel AI scanning into your own trading system or bot. Just a few lines of code to access the 300+ signal scanning service.'
+            }
           </p>
         </div>
       </section>
@@ -487,10 +492,10 @@ export default function DocsPage() {
               </div>
               <div className="flex items-center gap-2.5">
                 <span className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/[0.06] text-amber-400 border border-amber-500/[0.12] font-medium">
-                  API Token — 扫描接口
+                  API Token — {locale === 'zh' ? '扫描接口' : 'Scan API'}
                 </span>
                 <span className="text-xs px-3 py-1.5 rounded-lg bg-violet-500/[0.06] text-violet-400 border border-violet-500/[0.12] font-medium">
-                  JWT — 用户管理
+                  JWT — {locale === 'zh' ? '用户管理' : 'User Mgmt'}
                 </span>
               </div>
             </div>
@@ -502,7 +507,7 @@ export default function DocsPage() {
               <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
                 <Zap className="w-4 h-4 text-white" />
               </div>
-              <h3 className="text-xl font-bold tracking-tight">快速开始</h3>
+              <h3 className="text-xl font-bold tracking-tight">{locale === 'zh' ? '快速开始' : 'Quick Start'}</h3>
             </div>
             <CodeBlock lang="bash" code={`# 1. 注册账号
 curl -X POST ${API_BASE}/api/auth/register \\
@@ -539,8 +544,8 @@ curl ${API_BASE}/api/scan/briefings?limit=1 \\
                 <Brain className="w-4 h-4 text-white" />
               </div>
               <div>
-                <h3 className="text-xl font-bold tracking-tight">扫描接口</h3>
-                <p className="text-sm text-slate-400">核心功能 — 发起扫描、获取简报、SSE 实时推送</p>
+                <h3 className="text-xl font-bold tracking-tight">{locale === 'zh' ? '扫描接口' : 'Scan Endpoints'}</h3>
+                <p className="text-sm text-slate-400">{locale === 'zh' ? '核心功能 — 发起扫描、获取简报、SSE 实时推送' : 'Core — Start scan, get briefings, SSE real-time push'}</p>
               </div>
             </div>
             <div className="space-y-3">
@@ -557,8 +562,8 @@ curl ${API_BASE}/api/scan/briefings?limit=1 \\
                 <Lock className="w-4 h-4 text-white" />
               </div>
               <div>
-                <h3 className="text-xl font-bold tracking-tight">认证接口</h3>
-                <p className="text-sm text-slate-400">注册、登录 — 无需认证即可调用</p>
+                <h3 className="text-xl font-bold tracking-tight">{locale === 'zh' ? '认证接口' : 'Auth Endpoints'}</h3>
+                <p className="text-sm text-slate-400">{locale === 'zh' ? '注册、登录 — 无需认证即可调用' : 'Register, Login — No auth required'}</p>
               </div>
             </div>
             <div className="space-y-3">
@@ -575,8 +580,8 @@ curl ${API_BASE}/api/scan/briefings?limit=1 \\
                 <Shield className="w-4 h-4 text-white" />
               </div>
               <div>
-                <h3 className="text-xl font-bold tracking-tight">用户接口</h3>
-                <p className="text-sm text-slate-400">API Token 的创建、列表和吁销管理</p>
+                <h3 className="text-xl font-bold tracking-tight">{locale === 'zh' ? '用户接口' : 'User Endpoints'}</h3>
+                <p className="text-sm text-slate-400">{locale === 'zh' ? 'API Token 的创建、列表和吁销管理' : 'API Token creation, listing, and revocation'}</p>
               </div>
             </div>
             <div className="space-y-3">
@@ -589,8 +594,8 @@ curl ${API_BASE}/api/scan/briefings?limit=1 \\
           {/* Error Format */}
           <div className="relative p-7 rounded-2xl bg-white/[0.02] border border-white/[0.06] overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-500/20 to-transparent" />
-            <h3 className="text-lg font-bold mb-3 tracking-tight">通用错误格式</h3>
-            <p className="text-sm text-slate-400 mb-4">所有接口失败时返回统一的 JSON 错误格式：</p>
+            <h3 className="text-lg font-bold mb-3 tracking-tight">{locale === 'zh' ? '通用错误格式' : 'Error Format'}</h3>
+            <p className="text-sm text-slate-400 mb-4">{locale === 'zh' ? '所有接口失败时返回统一的 JSON 错误格式：' : 'All endpoints return a unified JSON error format on failure:'}</p>
             <CodeBlock code={`{
   "success": false,
   "error": "错误描述信息"
@@ -628,7 +633,7 @@ curl ${API_BASE}/api/scan/briefings?limit=1 \\
                 <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
                   <BarChart3 className="w-4 h-4 text-white" />
                 </div>
-                <h3 className="text-lg font-bold tracking-tight">300 信号矩阵参考</h3>
+                <h3 className="text-lg font-bold tracking-tight">{locale === 'zh' ? '300 信号矩阵参考' : '300 Signal Matrix Reference'}</h3>
               </div>
               <p className="text-sm text-slate-400 mb-5">
                 每次扫描结果中的 <code className="text-cyan-400 bg-cyan-500/[0.08] px-1.5 py-0.5 rounded">triggeredSignals</code> 包含被触发的信号，对应以下 10 大信号组：
