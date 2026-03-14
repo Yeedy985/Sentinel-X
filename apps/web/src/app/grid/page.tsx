@@ -72,9 +72,9 @@ export default function GridPage() {
   const handleSort = (s: 'pnl' | 'copies' | 'newest') => { setSort(s); setPage(1); };
 
   const downloads = [
-    { name: 'Windows', sub: 'Windows 10/11 64-bit', icon: Monitor, file: 'https://github.com/Yeedy985/AAGS/releases/download/v1.0.0/AAGS.Setup.1.0.0.exe', ext: '.exe', size: '107 MB', color: 'cyan', gradient: 'from-cyan-500 to-blue-600', glow: 'hover:shadow-cyan-500/20' },
-    { name: 'macOS', sub: 'macOS 12+ (Intel / Apple Silicon)', icon: Monitor, file: '/downloads/AAGS.dmg', ext: '.dmg', size: '90 MB', color: 'violet', gradient: 'from-violet-500 to-purple-600', glow: 'hover:shadow-violet-500/20' },
-    { name: 'Android', sub: 'Android 8.0+', icon: Smartphone, file: '/downloads/AAGS.apk', ext: '.apk', size: '45 MB', color: 'emerald', gradient: 'from-emerald-500 to-teal-600', glow: 'hover:shadow-emerald-500/20' },
+    { name: 'Windows', sub: 'Windows 10/11 64-bit', icon: Monitor, file: 'https://github.com/Yeedy985/AAGS/releases/download/v1.0.0/AAGS.Setup.1.0.0.exe', ext: '.exe', size: '107 MB', color: 'cyan', gradient: 'from-cyan-500 to-blue-600', glow: 'hover:shadow-cyan-500/20', comingSoon: false },
+    { name: 'macOS', sub: 'macOS 12+ (Intel / Apple Silicon)', icon: Monitor, file: '', ext: '.dmg', size: '', color: 'violet', gradient: 'from-violet-500 to-purple-600', glow: 'hover:shadow-violet-500/20', comingSoon: true },
+    { name: 'Android', sub: 'Android 8.0+', icon: Smartphone, file: '', ext: '.apk', size: '', color: 'emerald', gradient: 'from-emerald-500 to-teal-600', glow: 'hover:shadow-emerald-500/20', comingSoon: true },
   ];
 
   const highlights = [
@@ -261,16 +261,27 @@ export default function GridPage() {
                       </div>
                       <h3 className="text-lg font-bold mb-1.5">{dl.name}</h3>
                       <p className="text-sm text-slate-400 mb-5">{dl.sub}</p>
-                      <a
-                        href={dl.file}
-                        className={`group/btn relative inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold text-white overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-${dl.color}-500/20`}
-                      >
-                        <div className={`absolute inset-0 bg-gradient-to-r ${dl.gradient}`} />
-                        <div className={`absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity`} />
-                        <Download className="relative w-4 h-4" />
-                        <span className="relative">下载 {dl.ext}</span>
-                      </a>
-                      <p className="text-xs text-slate-500 mt-4">v1.0.0 · 约 {dl.size}</p>
+                      {dl.comingSoon ? (
+                        <>
+                          <span className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold text-slate-500 bg-white/[0.04] border border-white/[0.08] cursor-not-allowed">
+                            即将上线
+                          </span>
+                          <p className="text-xs text-slate-600 mt-4">敬请期待</p>
+                        </>
+                      ) : (
+                        <>
+                          <a
+                            href={dl.file}
+                            className={`group/btn relative inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold text-white overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-${dl.color}-500/20`}
+                          >
+                            <div className={`absolute inset-0 bg-gradient-to-r ${dl.gradient}`} />
+                            <div className={`absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity`} />
+                            <Download className="relative w-4 h-4" />
+                            <span className="relative">下载 {dl.ext}</span>
+                          </a>
+                          <p className="text-xs text-slate-500 mt-4">v1.0.0 · 约 {dl.size}</p>
+                        </>
+                      )}
                     </div>
                   </div>
                 );
