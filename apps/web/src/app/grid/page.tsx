@@ -68,21 +68,24 @@ export default function GridPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // 动态获取 GitHub 最新 Release 信息
-  const [latestRelease, setLatestRelease] = useState<{ version: string; exeUrl: string; exeSize: string } | null>(null);
+  const [latestRelease, setLatestRelease] = useState<{ version: string; exeUrl: string; exeSize: string; dmgUrl: string; dmgSize: string } | null>(null);
   useEffect(() => {
     fetch('https://api.github.com/repos/Yeedy985/AAGS/releases/latest')
       .then(r => r.json())
       .then(data => {
-        const ver = data.tag_name?.replace(/^v/, '') || '1.0.1';
+        const ver = data.tag_name?.replace(/^v/, '') || '1.0.2';
         const exe = data.assets?.find((a: any) => a.name.endsWith('.exe') && !a.name.includes('blockmap'));
+        const dmg = data.assets?.find((a: any) => a.name.endsWith('.dmg'));
         setLatestRelease({
           version: ver,
           exeUrl: exe?.browser_download_url || `https://github.com/Yeedy985/AAGS/releases/latest`,
           exeSize: exe ? `${(exe.size / 1024 / 1024).toFixed(0)} MB` : '107 MB',
+          dmgUrl: dmg?.browser_download_url || '',
+          dmgSize: dmg ? `${(dmg.size / 1024 / 1024).toFixed(0)} MB` : '',
         });
       })
       .catch(() => {
-        setLatestRelease({ version: '1.0.1', exeUrl: 'https://github.com/Yeedy985/AAGS/releases/latest', exeSize: '107 MB' });
+        setLatestRelease({ version: '1.0.2', exeUrl: 'https://github.com/Yeedy985/AAGS/releases/latest', exeSize: '107 MB', dmgUrl: '', dmgSize: '' });
       });
   }, []);
 
@@ -101,8 +104,8 @@ export default function GridPage() {
   const handleSort = (s: 'pnl' | 'copies' | 'newest') => { setSort(s); setPage(1); };
 
   const downloads = [
-    { name: 'Windows', sub: 'Windows 10/11 64-bit', icon: Monitor, file: latestRelease?.exeUrl || 'https://github.com/Yeedy985/AAGS/releases/latest', ext: '.exe', size: latestRelease?.exeSize || '107 MB', version: latestRelease?.version || '1.0.1', color: 'cyan', gradient: 'from-cyan-500 to-blue-600', glow: 'hover:shadow-cyan-500/20', comingSoon: false },
-    { name: 'macOS', sub: 'macOS 12+ (Intel / Apple Silicon)', icon: Monitor, file: '', ext: '.dmg', size: '', version: '', color: 'violet', gradient: 'from-violet-500 to-purple-600', glow: 'hover:shadow-violet-500/20', comingSoon: true },
+    { name: 'Windows', sub: 'Windows 10/11 64-bit', icon: Monitor, file: latestRelease?.exeUrl || 'https://github.com/Yeedy985/AAGS/releases/latest', ext: '.exe', size: latestRelease?.exeSize || '107 MB', version: latestRelease?.version || '1.0.2', color: 'cyan', gradient: 'from-cyan-500 to-blue-600', glow: 'hover:shadow-cyan-500/20', comingSoon: false },
+    { name: 'macOS', sub: 'macOS 12+ (Intel / Apple Silicon)', icon: Monitor, file: latestRelease?.dmgUrl || '', ext: '.dmg', size: latestRelease?.dmgSize || '', version: latestRelease?.dmgUrl ? (latestRelease?.version || '') : '', color: 'violet', gradient: 'from-violet-500 to-purple-600', glow: 'hover:shadow-violet-500/20', comingSoon: !latestRelease?.dmgUrl },
     { name: 'Android', sub: 'Android 8.0+', icon: Smartphone, file: '', ext: '.apk', size: '', version: '', color: 'emerald', gradient: 'from-emerald-500 to-teal-600', glow: 'hover:shadow-emerald-500/20', comingSoon: true },
   ];
 
