@@ -19,6 +19,7 @@ import { strategyRoutes } from './routes/strategy';
 import { SERVICE_VERSION } from '@sentinel/shared';
 import { startScanWorker } from './worker/scanWorker';
 import { startRechargeScanner } from './worker/rechargeScanner';
+import { startHeartbeatCleanupWorker } from './routes/strategy';
 
 const app = new Hono();
 
@@ -55,6 +56,7 @@ app.route('/api/strategy', strategyRoutes);
 // ── 启动 Worker ──
 startScanWorker();
 startRechargeScanner();
+startHeartbeatCleanupWorker();
 
 // ── 启动 HTTP ──
 const port = Number(process.env.PORT) || 3001;

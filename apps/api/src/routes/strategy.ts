@@ -20,6 +20,18 @@ function generateShareCode(): string {
   return crypto.randomBytes(6).toString('base64url').slice(0, 8);
 }
 
+// 获取心跳配置 (从 admin_settings 表读取)
+async function getHeartbeatSettings(): Promise<{ hideMinutes: number; deleteMinutes: number }> {
+  const [hideSetting, deleteSetting] = await Promise.all([
+    db.adminSetting.findUnique({ where: { key: 'plaza_heartbeat_hide_minutes' } }),
+    db.adminSetting.findUnique({ where: { key: 'plaza_heartbeat_delete_minutes' } }),
+  ]);
+  return {
+    hideMinutes: (hideSetting?.value as number) ?? 5,              // 默认 5 分钟
+    deleteMinutes: (deleteSetting?.value as number) ?? 10080,      // 默认 7 天 = 10080 分钟
+  };
+}
+
 // ── 分享策略 (需登录) ──
 strategyRoutes.post('/share', requireApiToken, async (c) => {
   try {
@@ -75,6 +87,7 @@ strategyRoutes.post('/share', requireApiToken, async (c) => {
         chartPoints: chartPoints ?? [],
         isRunning: isRunning ?? true,
         lastSyncAt: new Date(),
+        lastHeartbeat: new Date(),
       },
     });
 
@@ -125,6 +138,7 @@ strategyRoutes.put('/:code/sync', requireApiToken, async (c) => {
       ...(chartPoints !== undefined && { chartPoints }),
       ...(isRunning !== undefined && { isRunning }),
       lastSyncAt: new Date(),
+      lastHeartbeat: new Date(),
     },
   });
 
@@ -162,9 +176,18 @@ strategyRoutes.get('/plaza', async (c) => {
   const minPnlPercent = parseFloat(c.req.query('minPnlPercent') || '-999999');
   const maxPnlPercent = parseFloat(c.req.query('maxPnlPercent') || '999999');
 
+  // 读取心跳配置，过滤掉心跳超时的策略
+  const { hideMinutes } = await getHeartbeatSettings();
+  const heartbeatCutoff = new Date(Date.now() - hideMinutes * 60 * 1000);
+
   const where: any = {
     status: 'ACTIVE',
     pnlPercent: { gte: minPnlPercent, lte: maxPnlPercent },
+    // 心跳未过期: lastHeartbeat 存在且大于截止时间，或者 lastHeartbeat 为空（兼容旧数据，按 lastSyncAt 兜底）
+    OR: [
+      { lastHeartbeat: { gte: heartbeatCutoff } },
+      { lastHeartbeat: null, lastSyncAt: { gte: heartbeatCutoff } },
+    ],
   };
   if (symbol) where.symbol = symbol;
   if (minRunDays > 0) where.runSeconds = { gte: minRunDays * 86400 };
@@ -270,6 +293,73 @@ strategyRoutes.get('/:code', async (c) => {
     },
   });
 });
+
+// ── 心跳 (需登录, 仅拥有者) ──
+strategyRoutes.post('/:code/heartbeat', requireApiToken, async (c) => {
+  const userId = c.get('userId');
+  const shareCode = c.req.param('code');
+
+  if (shareCode === 'plaza' || shareCode === 'share') return c.notFound();
+
+  const strategy = await db.sharedStrategy.findUnique({ where: { shareCode } });
+  if (!strategy) {
+    return c.json<ApiResponse>({ success: false, error: '策略不存在' }, 404);
+  }
+  if (strategy.userId !== userId) {
+    return c.json<ApiResponse>({ success: false, error: '无权操作此策略' }, 403);
+  }
+  if (strategy.status !== 'ACTIVE') {
+    return c.json<ApiResponse>({ success: false, error: '策略已下架' }, 400);
+  }
+
+  await db.sharedStrategy.update({
+    where: { shareCode },
+    data: { lastHeartbeat: new Date() },
+  });
+
+  return c.json<ApiResponse>({ success: true, data: { heartbeat: true } });
+});
+
+// ── 心跳清理定时任务 (由 index.ts 启动) ──
+export async function cleanupExpiredStrategies() {
+  try {
+    const { deleteMinutes } = await getHeartbeatSettings();
+    const deleteCutoff = new Date(Date.now() - deleteMinutes * 60 * 1000);
+
+    // 查找心跳超时的 ACTIVE 策略
+    const where: any = {
+      status: 'ACTIVE',
+      OR: [
+        { lastHeartbeat: { lt: deleteCutoff } },
+        { lastHeartbeat: null, lastSyncAt: { lt: deleteCutoff } },
+        { lastHeartbeat: null, lastSyncAt: null, createdAt: { lt: deleteCutoff } },
+      ],
+    };
+    const expired = await db.sharedStrategy.findMany({
+      where,
+      select: { id: true, shareCode: true, strategyName: true },
+    });
+
+    if (expired.length > 0) {
+      await db.sharedStrategy.updateMany({
+        where: { id: { in: expired.map(e => e.id) } },
+        data: { status: 'REMOVED' },
+      });
+      console.log(`[Heartbeat Cleanup] Removed ${expired.length} expired strategies:`, expired.map(e => e.shareCode));
+    }
+  } catch (err) {
+    console.error('[Heartbeat Cleanup] Error:', err);
+  }
+}
+
+export function startHeartbeatCleanupWorker() {
+  // 每 10 分钟检查一次
+  const INTERVAL = 10 * 60 * 1000;
+  console.log('[Heartbeat Cleanup] Worker started, checking every 10 minutes');
+  setInterval(cleanupExpiredStrategies, INTERVAL);
+  // 启动后立即执行一次
+  setTimeout(cleanupExpiredStrategies, 5000);
+}
 
 // ── 记录复制 (公开) ──
 strategyRoutes.post('/:code/copy', async (c) => {
