@@ -375,7 +375,7 @@ export default function GridPage() {
 }
 
 // ==================== Linux 部署区块 ====================
-const REPO_URL = 'https://alphinel.com/grid/repo';
+const REPO_URL = 'https://github.com/Yeedy985/AAGS.git';
 
 function CopyBlock({ code, label }: { code: string; label?: string }) {
   const [copied, setCopied] = useState(false);
