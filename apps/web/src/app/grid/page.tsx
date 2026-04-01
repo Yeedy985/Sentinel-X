@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import {
   TrendingUp, RefreshCw, BarChart3, Download, Monitor, Smartphone,
   ChevronLeft, ChevronRight, Grid3X3, Share2, Copy, LineChart, Bell, Zap,
+  Server, Terminal, Check, ClipboardCopy, ExternalLink, Shield,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -362,10 +363,133 @@ export default function GridPage() {
             </div>
           </section>
 
+          {/* ═══════ Linux 服务器部署 ═══════ */}
+          <LinuxDeploySection t={t} />
+
         </div>
       </div>
 
       <Footer />
     </div>
+  );
+}
+
+// ==================== Linux 部署区块 ====================
+const REPO_URL = 'https://alphinel.com/grid/repo';
+
+function CopyBlock({ code, label }: { code: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <div className="relative group">
+      {label && <p className="text-xs text-slate-500 mb-1.5 font-medium">{label}</p>}
+      <div className="flex items-center gap-2 bg-[#0d1117] border border-slate-800/60 rounded-xl px-4 py-3 font-mono text-[13px] text-emerald-300 overflow-x-auto">
+        <span className="text-slate-600 select-none">$</span>
+        <code className="flex-1 whitespace-pre">{code}</code>
+        <button onClick={handleCopy} className="shrink-0 p-1.5 rounded-lg hover:bg-white/[0.06] text-slate-500 hover:text-white transition-all" title="Copy">
+          {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <ClipboardCopy className="w-4 h-4" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function LinuxDeploySection({ t }: { t: (key: string) => string }) {
+  const steps = [
+    {
+      num: '1',
+      title: t('grid.linuxStep1Title'),
+      desc: t('grid.linuxStep1Desc'),
+      code: 'curl -fsSL https://get.docker.com | sh',
+      icon: Terminal,
+    },
+    {
+      num: '2',
+      title: t('grid.linuxStep2Title'),
+      desc: t('grid.linuxStep2Desc'),
+      code: `git clone ${REPO_URL} AAGS && cd AAGS && docker build -t aags . && docker run -d -p 8080:8080 --name aags --restart always aags`,
+      icon: Server,
+    },
+    {
+      num: '3',
+      title: t('grid.linuxStep3Title'),
+      desc: t('grid.linuxStep3Desc'),
+      code: 'http://YOUR_SERVER_IP:8080',
+      icon: ExternalLink,
+    },
+  ];
+
+  const features = [
+    { icon: Shield, text: t('grid.linuxFeature1') },
+    { icon: RefreshCw, text: t('grid.linuxFeature2') },
+    { icon: Zap, text: t('grid.linuxFeature3') },
+    { icon: Download, text: t('grid.linuxFeature4') },
+  ];
+
+  return (
+    <section className="mt-20" id="linux">
+      <div className="text-center mb-10">
+        <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-orange-500/[0.08] border border-orange-500/[0.15] text-sm font-medium mb-5">
+          <Server className="w-4 h-4 text-orange-400" />
+          <span className="text-orange-300">{t('grid.linuxBadge')}</span>
+        </div>
+        <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3">{t('grid.linuxTitle')}</h2>
+        <p className="text-base text-slate-400 max-w-xl mx-auto">{t('grid.linuxDesc')}</p>
+      </div>
+
+      {/* 步骤卡片 */}
+      <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto mb-8">
+        {steps.map((step) => {
+          const Icon = step.icon;
+          return (
+            <div key={step.num} className="relative p-6 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-orange-500/20 transition-all group">
+              <div className="absolute -top-3 -left-1 w-7 h-7 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-xs font-bold text-white shadow-lg">
+                {step.num}
+              </div>
+              <div className="w-11 h-11 rounded-xl bg-orange-500/[0.08] flex items-center justify-center mb-4 group-hover:bg-orange-500/[0.12] transition-colors">
+                <Icon className="w-5 h-5 text-orange-400" />
+              </div>
+              <h3 className="text-[15px] font-bold mb-1.5">{step.title}</h3>
+              <p className="text-sm text-slate-400 mb-4">{step.desc}</p>
+              {step.num !== '3' ? (
+                <CopyBlock code={step.code} />
+              ) : (
+                <div className="bg-[#0d1117] border border-slate-800/60 rounded-xl px-4 py-3 font-mono text-[13px] text-amber-300">
+                  {step.code}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 更新命令 */}
+      <div className="max-w-4xl mx-auto mb-8">
+        <CopyBlock
+          label={t('grid.linuxUpdateTitle')}
+          code="cd AAGS && git pull && docker build -t aags . && docker stop aags && docker rm aags && docker run -d -p 8080:8080 --name aags --restart always aags"
+        />
+      </div>
+
+      {/* 特性 */}
+      <div className="max-w-3xl mx-auto grid sm:grid-cols-2 gap-3">
+        {features.map((f, i) => {
+          const Icon = f.icon;
+          return (
+            <div key={i} className="flex items-center gap-3.5 p-3.5 rounded-xl hover:bg-white/[0.03] transition-colors">
+              <div className="w-10 h-10 rounded-lg bg-orange-500/[0.06] flex items-center justify-center shrink-0">
+                <Icon className="w-5 h-5 text-orange-400" />
+              </div>
+              <span className="text-sm text-slate-300 font-medium">{f.text}</span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

@@ -83,7 +83,22 @@
     "highlight3": "一键分享你的策略到广场",
     "highlight4": "一键复制高手的策略参数",
     "highlight5": "实时收益曲线和详细报表",
-    "highlight6": "异常和熔断即时通知到手机"
+    "highlight6": "异常和熔断即时通知到手机",
+    "linuxBadge": "Linux 服务器部署",
+    "linuxTitle": "在 Linux 服务器上运行",
+    "linuxDesc": "无需桌面环境，Docker 一键部署，通过浏览器远程访问你的网格交易终端",
+    "linuxStep1Title": "安装 Docker",
+    "linuxStep1Desc": "如果还没安装 Docker，一键安装",
+    "linuxStep2Title": "拉取并运行",
+    "linuxStep2Desc": "构建镜像并启动容器，自动守护重启",
+    "linuxStep3Title": "打开浏览器",
+    "linuxStep3Desc": "访问你的服务器 IP + 端口即可使用",
+    "linuxFeature1": "零依赖 — 只需 Docker，无需 Node.js",
+    "linuxFeature2": "自动重启 — 容器崩溃或服务器重启后自动恢复",
+    "linuxFeature3": "内置代理 — 交易所 API 跨域问题已解决",
+    "linuxFeature4": "一键更新 — docker pull 即可升级到最新版",
+    "linuxUpdateTitle": "更新到最新版",
+    "linuxCopyTip": "点击复制命令"
   },
   "pricing": {
     "badge": "AI 市场扫描",

@@ -83,7 +83,22 @@
     "highlight3": "Share your strategy to the plaza with one click",
     "highlight4": "Copy expert strategy parameters with one click",
     "highlight5": "Real-time PnL chart and detailed reports",
-    "highlight6": "Instant anomaly and circuit-break notifications"
+    "highlight6": "Instant anomaly and circuit-break notifications",
+    "linuxBadge": "Linux Server Deploy",
+    "linuxTitle": "Run on Linux Server",
+    "linuxDesc": "No desktop required. Deploy with Docker in one command, access your grid trading terminal via browser",
+    "linuxStep1Title": "Install Docker",
+    "linuxStep1Desc": "Install Docker if not already installed",
+    "linuxStep2Title": "Pull & Run",
+    "linuxStep2Desc": "Build image and start container with auto-restart",
+    "linuxStep3Title": "Open Browser",
+    "linuxStep3Desc": "Access your server IP + port to start trading",
+    "linuxFeature1": "Zero dependencies — only Docker needed",
+    "linuxFeature2": "Auto-restart — recovers from crashes and reboots",
+    "linuxFeature3": "Built-in proxy — exchange API CORS handled",
+    "linuxFeature4": "One-click update — docker pull to upgrade",
+    "linuxUpdateTitle": "Update to latest",
+    "linuxCopyTip": "Click to copy command"
   },
   "pricing": {
     "badge": "AI Market Scan",
