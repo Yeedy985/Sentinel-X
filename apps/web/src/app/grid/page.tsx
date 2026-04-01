@@ -469,11 +469,18 @@ function LinuxDeploySection({ t }: { t: (key: string) => string }) {
       </div>
 
       {/* 更新命令 */}
-      <div className="max-w-4xl mx-auto mb-8">
+      <div className="max-w-4xl mx-auto mb-8 space-y-4">
         <CopyBlock
           label={t('grid.linuxUpdateTitle')}
           code={`docker pull ${DOCKER_IMAGE} && docker stop aags && docker rm aags && docker run -d -p 8080:8080 --name aags --restart always ${DOCKER_IMAGE}`}
         />
+
+        {/* Watchtower 自动更新 */}
+        <div className="p-4 rounded-xl bg-emerald-500/[0.04] border border-emerald-500/[0.12]">
+          <p className="text-sm font-semibold text-emerald-400 mb-1.5">{t('grid.linuxAutoUpdateTitle')}</p>
+          <p className="text-xs text-slate-400 mb-3">{t('grid.linuxAutoUpdateDesc')}</p>
+          <CopyBlock code="docker run -d --name watchtower --restart always -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower --interval 300 aags" />
+        </div>
       </div>
 
       {/* 特性 */}

@@ -97,7 +97,9 @@
     "linuxFeature2": "自动重启 — 容器崩溃或服务器重启后自动恢复",
     "linuxFeature3": "内置代理 — 交易所 API 跨域问题已解决",
     "linuxFeature4": "一键更新 — docker pull 即可升级到最新版",
-    "linuxUpdateTitle": "更新到最新版",
+    "linuxUpdateTitle": "手动更新到最新版",
+    "linuxAutoUpdateTitle": "🔄 开启自动更新（推荐）",
+    "linuxAutoUpdateDesc": "运行以下命令后，系统每 5 分钟自动检查新版本并静默更新，无需手动操作：",
     "linuxCopyTip": "点击复制命令"
   },
   "pricing": {

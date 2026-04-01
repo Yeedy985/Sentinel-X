@@ -97,7 +97,9 @@
     "linuxFeature2": "Auto-restart — recovers from crashes and reboots",
     "linuxFeature3": "Built-in proxy — exchange API CORS handled",
     "linuxFeature4": "One-click update — docker pull to upgrade",
-    "linuxUpdateTitle": "Update to latest",
+    "linuxUpdateTitle": "Manual update to latest",
+    "linuxAutoUpdateTitle": "🔄 Enable auto-update (recommended)",
+    "linuxAutoUpdateDesc": "Run this once and the system will check for updates every 5 minutes and auto-upgrade silently:",
     "linuxCopyTip": "Click to copy command"
   },
   "pricing": {
