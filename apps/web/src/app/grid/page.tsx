@@ -375,7 +375,7 @@ export default function GridPage() {
 }
 
 // ==================== Linux 部署区块 ====================
-const REPO_URL = 'https://github.com/Yeedy985/AAGS.git';
+const DOCKER_IMAGE = 'ghcr.io/yeedy985/aags:latest';
 
 function CopyBlock({ code, label }: { code: string; label?: string }) {
   const [copied, setCopied] = useState(false);
@@ -412,7 +412,7 @@ function LinuxDeploySection({ t }: { t: (key: string) => string }) {
       num: '2',
       title: t('grid.linuxStep2Title'),
       desc: t('grid.linuxStep2Desc'),
-      code: `git clone ${REPO_URL} AAGS && cd AAGS && docker build -t aags . && docker run -d -p 8080:8080 --name aags --restart always aags`,
+      code: `docker run -d -p 8080:8080 --name aags --restart always ${DOCKER_IMAGE}`,
       icon: Server,
     },
     {
@@ -472,7 +472,7 @@ function LinuxDeploySection({ t }: { t: (key: string) => string }) {
       <div className="max-w-4xl mx-auto mb-8">
         <CopyBlock
           label={t('grid.linuxUpdateTitle')}
-          code="cd AAGS && git pull && docker build -t aags . && docker stop aags && docker rm aags && docker run -d -p 8080:8080 --name aags --restart always aags"
+          code={`docker pull ${DOCKER_IMAGE} && docker stop aags && docker rm aags && docker run -d -p 8080:8080 --name aags --restart always ${DOCKER_IMAGE}`}
         />
       </div>
 
