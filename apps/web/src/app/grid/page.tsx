@@ -412,7 +412,7 @@ function LinuxDeploySection({ t }: { t: (key: string) => string }) {
       num: '2',
       title: t('grid.linuxStep2Title'),
       desc: t('grid.linuxStep2Desc'),
-      code: `docker run -d -p 8080:8080 --name aags --restart always ${DOCKER_IMAGE}`,
+      code: `docker stop aags 2>/dev/null; docker rm aags 2>/dev/null; docker pull ${DOCKER_IMAGE} && docker run -d -p 8080:8080 --name aags --restart always ${DOCKER_IMAGE}`,
       icon: Server,
     },
     {
@@ -472,7 +472,7 @@ function LinuxDeploySection({ t }: { t: (key: string) => string }) {
       <div className="max-w-4xl mx-auto mb-8 space-y-4">
         <CopyBlock
           label={t('grid.linuxUpdateTitle')}
-          code={`docker pull ${DOCKER_IMAGE} && docker stop aags && docker rm aags && docker run -d -p 8080:8080 --name aags --restart always ${DOCKER_IMAGE}`}
+          code={`docker pull ${DOCKER_IMAGE} && docker stop aags 2>/dev/null; docker rm aags 2>/dev/null; docker run -d -p 8080:8080 --name aags --restart always ${DOCKER_IMAGE}`}
         />
 
         {/* Watchtower 自动更新 */}
